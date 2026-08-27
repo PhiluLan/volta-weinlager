@@ -56,3 +56,51 @@ create policy "authenticated users can read wines" on public.wines for select to
 create policy "authenticated users can read balances" on public.stock_balances for select to authenticated using (true);
 create policy "authenticated users can read movements" on public.stock_movements for select to authenticated using (true);
 create policy "authenticated users can write movements" on public.stock_movements for insert to authenticated with check (auth.uid() = created_by);
+
+revoke all on table public.locations, public.wines, public.stock_balances, public.stock_movements from anon;
+grant select on table public.locations, public.wines, public.stock_balances, public.stock_movements to authenticated;
+grant insert, update on table public.stock_balances to authenticated;
+grant insert on table public.stock_movements to authenticated;
+
+create index if not exists idx_stock_balances_location_id on public.stock_balances(location_id);
+create index if not exists idx_stock_movements_created_by on public.stock_movements(created_by);
+create index if not exists idx_stock_movements_from_location_id on public.stock_movements(from_location_id);
+create index if not exists idx_stock_movements_to_location_id on public.stock_movements(to_location_id);
+create index if not exists idx_stock_movements_wine_id on public.stock_movements(wine_id);
+
+drop policy if exists "authenticated users can write movements" on public.stock_movements;
+create policy "authenticated users can write movements" on public.stock_movements
+  for insert to authenticated with check ((select auth.uid()) = created_by);
+
+drop policy if exists "authenticated users can update balances" on public.stock_balances;
+create policy "authenticated users can update balances" on public.stock_balances
+  for update to authenticated using (true) with check (true);
+create policy "authenticated users can insert balances" on public.stock_balances
+  for insert to authenticated with check (true);
+
+create or replace function public.record_stock_movement(
+  p_wine_id uuid, p_from_location_id uuid, p_to_location_id uuid,
+  p_cartons integer, p_movement_type text, p_note text default null
+) returns public.stock_movements
+language plpgsql security invoker set search_path = public
+as $$
+declare v_movement public.stock_movements;
+begin
+  if p_cartons <= 0 then raise exception 'Die Anzahl Kartons muss grösser als 0 sein'; end if;
+  if p_from_location_id is not null then
+    update public.stock_balances set cartons = cartons - p_cartons, updated_at = now()
+    where wine_id = p_wine_id and location_id = p_from_location_id and cartons >= p_cartons;
+    if not found then raise exception 'Nicht genügend Bestand vorhanden'; end if;
+  end if;
+  if p_to_location_id is not null then
+    insert into public.stock_balances (wine_id, location_id, cartons) values (p_wine_id, p_to_location_id, p_cartons)
+    on conflict (wine_id, location_id) do update set cartons = public.stock_balances.cartons + excluded.cartons, updated_at = now();
+  end if;
+  insert into public.stock_movements (wine_id, from_location_id, to_location_id, cartons, movement_type, note, created_by)
+  values (p_wine_id, p_from_location_id, p_to_location_id, p_cartons, p_movement_type, p_note, (select auth.uid()))
+  returning * into v_movement;
+  return v_movement;
+end;
+$$;
+
+grant execute on function public.record_stock_movement(uuid, uuid, uuid, integer, text, text) to authenticated;
