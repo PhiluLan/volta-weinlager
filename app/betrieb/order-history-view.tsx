@@ -5,7 +5,7 @@ import { useState } from "react";
 type Ref<T> = T | T[] | null;
 type OrderItem = { cartons: number; unit_price: number | null; wine: Ref<{ name: string; purchase_price: number | null }> };
 type Order = { id: string; status: string; created_at: string; delivery_date: string | null; order_items: OrderItem[] };
-type View = "order" | "inventory" | "history" | "monthly";
+type View = "order" | "inventory" | "history" | "monthly" | "suggestion";
 
 const one = <T,>(value: Ref<T>) => Array.isArray(value) ? value[0] : value;
 const money = (value: number) => `CHF ${value.toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -31,7 +31,7 @@ export default function OrderHistoryView({ profile, orders, onView, onSignOut }:
       <div className="business-content">
         <div className="page-heading"><div><div className="eyebrow">{profile.location_name} · Persönlicher Bereich</div><h1>Meine Bestellungen</h1><p>Bestellen, Bestand prüfen und eigene Bestellungen nachvollziehen.</p></div></div>
         <div className="business-tabs">
-          <button onClick={() => onView("order")}>Neue Bestellung</button><button onClick={() => onView("inventory")}>Bestand</button><button className="active" onClick={() => onView("history")}>Meine Bestellungen</button><button onClick={() => onView("monthly")}>Monatsübersicht</button>
+          <button onClick={() => onView("order")}>Neue Bestellung</button><button onClick={() => onView("inventory")}>Bestand</button><button className="active" onClick={() => onView("history")}>Meine Bestellungen</button><button onClick={() => onView("monthly")}>Monatsübersicht</button><button onClick={() => onView("suggestion")}>Wein vorschlagen</button>
         </div>
         <section className="inventory-panel business-history">
           <div className="panel-heading"><div><h2>Meine Bestellhistorie</h2><p>Nur Bestellungen für {profile.location_name}</p></div><span className="snapshot-badge">Geschützt</span></div>
