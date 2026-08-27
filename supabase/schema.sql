@@ -166,3 +166,22 @@ end;
 $$;
 grant execute on function public.approve_order(uuid) to anon, authenticated;
 create policy "mvp anon write movements" on public.stock_movements for insert to anon with check (created_by is null);
+
+-- Authentifizierung und Rollen. Dieser Block ersetzt den temporären MVP-Zugriff ohne Login.
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null unique,
+  full_name text,
+  role text not null default 'user' check (role in ('super_admin','user')),
+  location_id uuid references public.locations(id),
+  created_at timestamptz not null default now(),
+  constraint user_location_required check (role = 'super_admin' or location_id is not null)
+);
+alter table public.profiles enable row level security;
+revoke all on table public.locations, public.wines, public.stock_balances, public.stock_movements, public.orders, public.order_items from anon;
+grant select on table public.locations, public.wines, public.stock_balances, public.stock_movements, public.orders, public.order_items, public.profiles to authenticated;
+grant insert, update on table public.orders, public.order_items, public.profiles to authenticated;
+drop policy if exists "profiles self or admin read" on public.profiles;
+create policy "profiles self or admin read" on public.profiles for select to authenticated using (id = (select auth.uid()) or (select auth.jwt() ->> 'email') = 'planger@voltabraeu.ch');
+drop policy if exists "profiles admin write" on public.profiles;
+create policy "profiles admin write" on public.profiles for all to authenticated using ((select auth.jwt() ->> 'email') = 'planger@voltabraeu.ch') with check ((select auth.jwt() ->> 'email') = 'planger@voltabraeu.ch');

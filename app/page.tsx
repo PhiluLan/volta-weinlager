@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 type Wine = { id?: string; name: string; producer: string; vintage: string; category: string; stock: number; minStock: number; purchasePrice?: number; cartonsPerCase?: number };
@@ -28,6 +29,14 @@ const navItems = ["Übersicht", "Bestand", "Bestellungen", "Wareneingang", "Inve
 function categorySortValue(category: string) { const value = category.toLowerCase(); if (value.includes("schaum")) return 0; if (value.includes("weiss") || value.includes("weiß")) return 1; if (value.includes("rot")) return 2; return 3; }
 
 export default function Home() {
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ email?: string } | null>(null);
+  const [currentRole, setCurrentRole] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
   const [active, setActive] = useState("Übersicht");
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -69,6 +78,15 @@ export default function Home() {
   const totalStock = useMemo(() => inventory.reduce((sum, wine) => sum + wine.stock, 0), [inventory]);
   const totalValue = useMemo(() => inventory.reduce((sum, wine) => sum + wine.stock * (wine.purchasePrice ?? 0) * (wine.cartonsPerCase ?? 1), 0), [inventory]);
   useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) { setAuthChecked(true); return; }
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      if (profile?.role === "user") { router.push("/betrieb"); return; }
+      setCurrentUser(user); setCurrentRole(profile?.role ?? ""); setAuthChecked(true);
+    });
+  }, [router]);
+  useEffect(() => {
+    if (!authChecked || !currentUser || currentRole !== "super_admin") return;
     let mounted = true;
     Promise.all([
       supabase.from("wines").select("id,name,producer,vintage,category,purchase_price,cartons_per_case,min_stock").eq("active", true).order("name"),
@@ -90,7 +108,8 @@ export default function Home() {
       setDataLoading(false);
     });
     return () => { mounted = false; };
-  }, [refreshTick]);
+  }, [refreshTick, authChecked, currentRole, currentUser]);
+  async function signIn() { setLoginLoading(true); setLoginError(""); const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword }); setLoginLoading(false); if (error) { setLoginError("E-Mail oder Passwort ist nicht korrekt."); return; } window.location.reload(); }
   async function saveMovement() {
     if (!selectedWine?.id || !locationIds.Zentrallager || !locationIds[site]) return;
     const { error } = await supabase.rpc("record_stock_movement", { p_wine_id: selectedWine.id, p_from_location_id: locationIds.Zentrallager, p_to_location_id: locationIds[site], p_cartons: quantity, p_movement_type: "ausgabe", p_note: null });
@@ -165,6 +184,8 @@ export default function Home() {
     showNotice(masterWineId ? `${name} aktualisiert` : `${name} angelegt`); resetMasterWine();
   }
   function showNotice(message: string) { if (message === "Wareneingang kommt als nächster Workflow" || message === "Wareneingang kann im nächsten Schritt erfasst werden") { setActive("Wareneingang"); return; } if (message === "Bestellung für einen Betrieb wird vorbereitet") { setActive("Bestellungen"); return; } if (message === "Inventur kann im nächsten Schritt gestartet werden") { setActive("Inventur"); return; } if (message === "Wein-Stammdaten kommen als nächster Baustein") { setActive("Stammdaten"); return; } setNotice(message); window.setTimeout(() => setNotice(""), 3500); }
+  if (!authChecked) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Weinlager wird geladen …</h1></div></main>;
+  if (!currentUser || currentRole !== "super_admin") return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Volta Weinlager</h1><p>Bitte melde dich an, um das zentrale Weinlager zu öffnen.</p><label>E-Mail<input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="name@betrieb.ch" /></label><label>Passwort<input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void signIn(); }} /></label>{loginError && <div className="form-error">{loginError}</div>}<button className="primary-button auth-submit" disabled={loginLoading || !loginEmail || !loginPassword} onClick={signIn}>{loginLoading ? "Wird geprüft …" : "Anmelden"}</button><p className="auth-note">Interner Zugang für Volta Bräu</p></div></main>;
   if (active === "Bestand") {
     return <main className="inventory-page"><header className="inventory-top"><button className="back-button" onClick={() => setActive("Übersicht")}>← Übersicht</button><div className="top-actions"><button className="icon-button" aria-label="Benachrichtigungen">♧<i /></button><div className="top-avatar">PS</div></div></header><div className="inventory-content"><div className="page-heading"><div><div className="eyebrow">Zentrallager · Supabase Live-Daten</div><h1>Bestand</h1><p>61 Artikelpositionen aus der zentralen Weinlager-Liste.</p></div><button className="primary-button" onClick={() => showNotice("Wareneingang kommt als nächster Workflow")}>+ Wareneingang erfassen</button></div><div className="inventory-summary"><div><strong>1’806</strong><span>Kartons Gesamtbestand</span></div><div><strong>CHF 123’713</strong><span>Warenwert</span></div><div><strong>13</strong><span>Artikel ohne Bestand</span></div><div><strong>313</strong><span>Bestellte Kartons</span></div></div><section className="inventory-panel"><div className="panel-heading"><div><h2>Alle Artikel</h2><p>{dataLoading ? "Bestände werden geladen …" : "Live aus Supabase · Ausgabe wird dauerhaft protokolliert."}</p></div><span className="snapshot-badge">Live verbunden</span></div><div className="search-row"><div className="search-box"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Wein oder Produzent suchen..." /></div><button className="filter-button">Alle Kategorien <span>≡</span></button></div><div className="inventory-table"><div className="inventory-row inventory-head"><span>Artikel</span><span>Kategorie</span><span>Lieferant</span><span>Bestand</span><span>Aktion</span></div>{filteredWines.map((wine) => <div className="inventory-row" key={wine.name}><div className="wine-name"><div className="wine-bottle">♢</div><div><strong>{wine.name}</strong><small>{wine.vintage} · {wine.stock * (wine.cartonsPerCase ?? 6)} Einzelflaschen</small></div></div><span className="category-pill">{wine.category}</span><span className="supplier">{wine.producer}</span><strong>{wine.stock} <small className="unit-label">Kartons</small></strong><button className="row-action" onClick={() => { setSelectedWine(wine); setQuantity(1); }}>Ausgabe →</button></div>)}</div></section><div className="demo-note">Quelle: Weinlager_VB_Zentrale (1).xlsx · Mindestbestände werden als nächster Schritt konfigurierbar</div></div>{selectedWine && <div className="modal-backdrop" role="presentation" onClick={() => setSelectedWine(null)}><section className="movement-modal" role="dialog" aria-modal="true" aria-labelledby="movement-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Schliessen" onClick={() => setSelectedWine(null)}>×</button><div className="eyebrow">Lagerbewegung · Ausgabe</div><h2 id="movement-title">{selectedWine.name}</h2><p className="modal-subtitle">Bestand aktuell: <strong>{selectedWine.stock} Kartons</strong></p><label>Betrieb<select value={site} onChange={(event) => setSite(event.target.value)}><option>Consum</option><option>VB</option><option>Nomad</option><option>Krafft</option><option>Silo</option></select></label><label>Anzahl Kartons<input type="number" min="1" max={selectedWine.stock} value={quantity} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))} /></label>{quantity > selectedWine.stock && <div className="form-error">Nicht genügend Bestand vorhanden.</div>}<button className="primary-button modal-submit" disabled={quantity > selectedWine.stock} onClick={saveMovement}>Ausgabe speichern</button></section></div>}</main>;
   }
