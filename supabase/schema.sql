@@ -200,3 +200,22 @@ create policy "authenticated read orders" on public.orders for select to authent
 create policy "users create own orders" on public.orders for insert to authenticated with check (location_id = (select location_id from public.profiles where id = (select auth.uid())) and created_by = (select auth.uid()));
 create policy "users read own order items" on public.order_items for select to authenticated using (exists (select 1 from public.orders o where o.id = order_id and (o.location_id = (select location_id from public.profiles where id = (select auth.uid())) or (select auth.jwt() ->> 'email') = 'planger@voltabraeu.ch')));
 create policy "users create own order items" on public.order_items for insert to authenticated with check (exists (select 1 from public.orders o where o.id = order_id and o.location_id = (select location_id from public.profiles where id = (select auth.uid()))));
+alter table public.orders drop constraint if exists orders_status_check;
+alter table public.orders add constraint orders_status_check check (status in ('draft','submitted','approved','delivered','cancelled'));
+create or replace function public.complete_order(p_order_id uuid)
+returns void language plpgsql security invoker set search_path = public
+as $$
+declare v_order public.orders; v_central_id uuid; v_item record;
+begin
+  if (select auth.jwt() ->> 'email') <> 'planger@voltabraeu.ch' then raise exception 'Nur der Super-Admin darf Bestellungen abschliessen'; end if;
+  select * into v_order from public.orders where id = p_order_id and status = 'submitted' for update;
+  if not found then raise exception 'Bestellung nicht gefunden oder bereits erledigt'; end if;
+  select id into v_central_id from public.locations where name = 'Zentrallager';
+  for v_item in select wine_id, cartons from public.order_items where order_id = p_order_id loop
+    perform public.record_stock_movement(v_item.wine_id, v_central_id, v_order.location_id, v_item.cartons, 'ausgabe', 'Bestellung geliefert ' || p_order_id::text);
+  end loop;
+  update public.orders set status = 'delivered', approved_at = now() where id = p_order_id;
+end;
+$$;
+revoke execute on function public.complete_order(uuid) from anon;
+grant execute on function public.complete_order(uuid) to authenticated;
