@@ -169,6 +169,45 @@ body {
   font-size: 10px;
 }
 
+.inventory-group .inventory-row .supplier strong,
+.inventory-group .inventory-row .supplier small {
+  display: block;
+}
+
+.inventory-group .inventory-row .supplier small {
+  margin-top: 4px;
+  color: #8f8589;
+  font-size: 9px;
+}
+
+.inventory-group .inventory-row.out-of-stock {
+  opacity: .48;
+  background: #fafafa;
+}
+
+.inventory-group .inventory-row.out-of-stock .wine-bottle {
+  filter: grayscale(1);
+}
+
+.inventory-group .inventory-row.out-of-stock .status-low {
+  opacity: 1;
+}
+
+.inventory-group .inventory-row .wine-name small,
+.inventory-group .inventory-row .supplier small {
+  line-height: 1.35;
+}
+
+.master-field-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .master-field-wide {
+    grid-column: auto;
+  }
+}
+
 .supplier em {
   color: #aaa1a3;
   font-style: normal;

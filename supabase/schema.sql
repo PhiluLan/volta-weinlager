@@ -13,6 +13,8 @@ create table if not exists public.wines (
   name text not null,
   producer text,
   vintage text,
+  origin_country text,
+  grape_varieties text,
   bottle_size_l numeric(4,2),
   cartons_per_case integer,
   purchase_price numeric(10,2),
