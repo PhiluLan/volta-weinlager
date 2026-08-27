@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import InventoryView from "./inventory-view";
 import MasterDataView from "./master-data-view";
+import SettingsView from "./settings-view";
 
 type Wine = { id?: string; name: string; producer: string; vintage: string; category: string; stock: number; minStock: number; originCountry?: string; grapeVarieties?: string; purchasePrice?: number; cartonsPerCase?: number };
 type OrderItem = { wineId: string; name: string; cartons: number };
@@ -192,6 +193,9 @@ export default function Home() {
   function showNotice(message: string) { if (message === "Wareneingang kommt als nächster Workflow" || message === "Wareneingang kann im nächsten Schritt erfasst werden") { setActive("Wareneingang"); return; } if (message === "Bestellung für einen Betrieb wird vorbereitet") { setActive("Bestellungen"); return; } if (message === "Inventur kann im nächsten Schritt gestartet werden") { setActive("Inventur"); return; } if (message === "Wein-Stammdaten kommen als nächster Baustein") { setActive("Stammdaten"); return; } setNotice(message); window.setTimeout(() => setNotice(""), 3500); }
   if (!authChecked) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Weinlager wird geladen …</h1></div></main>;
   if (!currentUser || currentRole !== "super_admin") return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Volta Weinlager</h1><p>Bitte melde dich an, um das zentrale Weinlager zu öffnen.</p><label>E-Mail<input type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} placeholder="name@betrieb.ch" /></label><label>Passwort<input type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void signIn(); }} /></label>{loginError && <div className="form-error">{loginError}</div>}<button className="primary-button auth-submit" disabled={loginLoading || !loginEmail || !loginPassword} onClick={signIn}>{loginLoading ? "Wird geprüft …" : "Anmelden"}</button><p className="auth-note">Interner Zugang für Volta Bräu</p></div></main>;
+  if (active === "Einstellungen") {
+    return <SettingsView onBack={() => setActive("Übersicht")} onUsers={() => setActive("Benutzer")} onMasterData={() => setActive("Stammdaten")} onInventory={() => setActive("Bestand")} onSignOut={signOut} />;
+  }
   if (active === "Bestand") {
     return <InventoryView inventory={inventory} filteredWines={filteredWines} query={query} setQuery={setQuery} dataLoading={dataLoading} pendingOrderCartons={pendingOrderCartons} onIncoming={() => showNotice("Wareneingang kommt als nächster Workflow")} onBack={() => setActive("Übersicht")} onSelectWine={(wine) => { setSelectedWine(wine); setQuantity(1); }} selectedWine={selectedWine} onClose={() => setSelectedWine(null)} site={site} setSite={setSite} quantity={quantity} setQuantity={setQuantity} onSaveMovement={saveMovement} />;
   }
@@ -230,7 +234,7 @@ export default function Home() {
         <div className="brand"><div className="brand-mark">VB</div><div><div className="brand-name">Volta Weinlager</div><div className="brand-sub">Zentrales Lager</div></div></div>
         <div className="nav-label">Arbeitsbereich</div>
         <nav>{navItems.map((item, index) => <button key={item} className={`nav-item ${active === item ? "active" : ""}`} onClick={() => setActive(item)}><span className="nav-icon">{["⌂", "▦", "□", "↓", "◉", "≡", "⚙", "♙"][index]}</span>{item}{item === "Bestellungen" && <span className="nav-count">2</span>}</button>)}</nav>
-        <div className="sidebar-bottom"><div className="nav-label">Verwaltung</div><button className="nav-item"><span className="nav-icon">⚙</span>Einstellungen</button><button className="user-chip user-logout" onClick={signOut}><div className="avatar">PS</div><div><strong>Philipp</strong><span>Abmelden</span></div><span className="dots">•••</span></button></div>
+        <div className="sidebar-bottom"><div className="nav-label">Verwaltung</div><button className={`nav-item ${active === "Einstellungen" ? "active" : ""}`} onClick={() => setActive("Einstellungen")}><span className="nav-icon">⚙</span>Einstellungen</button><button className="user-chip user-logout" onClick={signOut}><div className="avatar">PS</div><div><strong>Philipp</strong><span>Abmelden</span></div><span className="dots">•••</span></button></div>
       </aside>
       <section className="content">
         <header className="topbar"><div className="breadcrumb">Volta Bräu <span>/</span> {active}</div><div className="top-actions"><button className="icon-button" aria-label="Benachrichtigungen" onClick={() => showNotice("Keine neuen Benachrichtigungen")}>♧<i /></button><div className="top-avatar">PS</div></div></header>
