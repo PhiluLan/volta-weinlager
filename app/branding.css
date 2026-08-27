@@ -352,6 +352,12 @@ body {
   padding-bottom: 16px;
 }
 
+.accounting-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .accounting-report-head h2 {
   margin: 0;
   color: #332a2f;
@@ -456,6 +462,14 @@ body {
   .accounting-row {
     grid-template-columns: 1fr auto;
     gap: 9px;
+  }
+
+  .accounting-actions {
+    width: 100%;
+  }
+
+  .accounting-actions button {
+    flex: 1;
   }
 
   .accounting-row > :nth-child(2) {
