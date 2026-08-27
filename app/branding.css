@@ -1,0 +1,86 @@
+@font-face {
+  font-family: "Boucherie Block";
+  src: url("/fonts/boucherie-block-bold.ttf") format("truetype");
+  font-display: swap;
+  font-weight: 700;
+}
+
+:root {
+  --ink: #292329;
+  --muted: #756d72;
+  --line: #e6e1e0;
+  --plum: #472936;
+  --cream: #f7f6f4;
+}
+
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  background: var(--cream);
+}
+
+.brand-name,
+.page-heading h1 {
+  font-family: "Boucherie Block", Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.brand-name {
+  font-size: 16px;
+  color: var(--plum);
+}
+
+.page-heading h1 {
+  font-size: 31px;
+}
+
+.auth-card h1 {
+  font-family: "Boucherie Block", Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.panel-heading h2,
+.quick-actions h2,
+.order-cart h2,
+.business-cart h2,
+.incoming-card h2,
+.master-form h2,
+.movement-modal h2 {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.primary-button,
+.secondary-button,
+.filter-button,
+.row-action {
+  border-radius: 4px;
+}
+
+.primary-button {
+  box-shadow: none;
+}
+
+.nav-item:hover,
+.nav-item.active {
+  background: #eee8eb;
+}
+
+.metric-card,
+.panel,
+.quick-actions,
+.inventory-panel,
+.business-cart,
+.incoming-card,
+.auth-card {
+  border-color: var(--line);
+  border-radius: 6px;
+}
+
+@media (max-width: 760px) {
+  .page-heading h1 {
+    font-size: 27px;
+  }
+}
