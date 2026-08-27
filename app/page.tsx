@@ -67,7 +67,7 @@ export default function Home() {
   const filteredHistory = useMemo(() => history.filter((movement) => (historyType === "Alle Bewegungen" || movement.type === historyType) && `${movement.wine} ${movement.from} ${movement.to} ${movement.note ?? ""}`.toLowerCase().includes(query.toLowerCase())), [history, historyType, query]);
   const lowStock = useMemo(() => inventory.filter((wine) => wine.stock <= wine.minStock).length, [inventory]);
   const totalStock = useMemo(() => inventory.reduce((sum, wine) => sum + wine.stock, 0), [inventory]);
-  const totalValue = useMemo(() => inventory.reduce((sum, wine) => sum + wine.stock * (wine.purchasePrice ?? 0), 0), [inventory]);
+  const totalValue = useMemo(() => inventory.reduce((sum, wine) => sum + wine.stock * (wine.purchasePrice ?? 0) * (wine.cartonsPerCase ?? 1), 0), [inventory]);
   useEffect(() => {
     let mounted = true;
     Promise.all([
