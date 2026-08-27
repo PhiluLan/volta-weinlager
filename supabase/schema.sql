@@ -137,6 +137,7 @@ create table if not exists public.order_items (
   order_id uuid not null references public.orders(id) on delete cascade,
   wine_id uuid not null references public.wines(id),
   cartons integer not null check (cartons > 0),
+  bottles_per_carton integer check (bottles_per_carton is null or bottles_per_carton > 0),
   unit_price numeric(10,2),
   created_at timestamptz not null default now(),
   unique(order_id, wine_id)

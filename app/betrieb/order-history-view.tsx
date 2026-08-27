@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 type Ref<T> = T | T[] | null;
-type OrderItem = { cartons: number; unit_price: number | null; wine: Ref<{ name: string; purchase_price: number | null }> };
+type OrderItem = { cartons: number; bottles_per_carton: number | null; unit_price: number | null; wine: Ref<{ name: string; purchase_price: number | null; cartons_per_case: number | null }> };
 type Order = { id: string; status: string; created_at: string; delivery_date: string | null; order_items: OrderItem[] };
 type View = "order" | "inventory" | "history" | "monthly" | "suggestion";
 
@@ -11,6 +11,8 @@ const one = <T,>(value: Ref<T>) => Array.isArray(value) ? value[0] : value;
 const money = (value: number) => `CHF ${value.toLocaleString("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const dateLabel = (value: string | null) => value ? new Date(`${value.includes("T") ? value : `${value}T12:00:00`}`).toLocaleDateString("de-CH", { dateStyle: "medium" }) : "nicht erfasst";
 const itemPrice = (item: OrderItem) => item.unit_price ?? one(item.wine)?.purchase_price ?? 0;
+const itemBottles = (item: OrderItem) => item.bottles_per_carton ?? one(item.wine)?.cartons_per_case ?? 1;
+const itemAmount = (item: OrderItem) => item.cartons * itemBottles(item) * itemPrice(item);
 
 type Props = {
   profile: { email: string; location_name: string };
@@ -38,7 +40,7 @@ export default function OrderHistoryView({ profile, orders, onView, onSignOut }:
           {orders.length === 0 ? <p className="empty-cart">Noch keine Bestellungen vorhanden.</p> : <div className="business-order-accordion">
             {orders.map((order) => {
               const items = order.order_items ?? [];
-              const total = items.reduce((sum, item) => sum + item.cartons * itemPrice(item), 0);
+              const total = items.reduce((sum, item) => sum + itemAmount(item), 0);
               const cartons = items.reduce((sum, item) => sum + item.cartons, 0);
               const isExpanded = expandedOrder === order.id;
               return <article className="business-order-accordion-item" key={order.id}>
@@ -48,8 +50,8 @@ export default function OrderHistoryView({ profile, orders, onView, onSignOut }:
                   <span className="business-order-summary-status"><span className={`order-status ${order.status}`}>{order.status === "delivered" ? "Erledigt" : "Übermittelt"}</span><span className="business-order-chevron">{isExpanded ? "⌃" : "⌄"}</span></span>
                 </button>
                 {isExpanded && <div className="business-order-details">
-                  <div className="business-order-detail-row business-order-detail-head"><span>Position / Wein</span><span>Menge</span><span>Einzelpreis</span><span>Betrag</span></div>
-                  {items.map((item, index) => { const price = itemPrice(item); return <div className="business-order-detail-row" key={`${order.id}-${index}`}><strong>{one(item.wine)?.name ?? "Unbekannter Wein"}</strong><span>{item.cartons} Kartons</span><span>{money(price)}</span><strong>{money(item.cartons * price)}</strong></div>; })}
+                  <div className="business-order-detail-row business-order-detail-head"><span>Position / Wein</span><span>Menge</span><span>Preis / Flasche</span><span>Betrag</span></div>
+                  {items.map((item, index) => { const price = itemPrice(item); return <div className="business-order-detail-row" key={`${order.id}-${index}`}><strong>{one(item.wine)?.name ?? "Unbekannter Wein"}</strong><span>{item.cartons} Kartons · {itemBottles(item)} Flaschen</span><span>{money(price)}</span><strong>{money(itemAmount(item))}</strong></div>; })}
                   <div className="business-order-detail-total"><span>Gesamtwert</span><strong>{money(total)}</strong></div>
                 </div>}
               </article>;
