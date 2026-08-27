@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
-type Wine = { id?: string; name: string; producer: string; vintage: string; category: string; stock: number; minStock: number; cartonsPerCase?: number };
+type Wine = { id?: string; name: string; producer: string; vintage: string; category: string; stock: number; minStock: number; purchasePrice?: number; cartonsPerCase?: number };
 type OrderItem = { wineId: string; name: string; cartons: number };
 type OrderSummary = { id: string; status: string; createdAt: string; approvedAt: string | null; locationName: string; items: { name: string; cartons: number }[] };
+type Activity = { type: string; wine: string; detail: string; time: string; tone: string };
 
 const wines: Wine[] = [
   { name: "Prosecco Stefany Bio DOC", producer: "Il Grappolo", vintage: "–", category: "Schaumwein", stock: 14, minStock: 10 },
@@ -16,11 +17,11 @@ const wines: Wine[] = [
   { name: "Rose Saignée", producer: "Landerer", vintage: "2022", category: "Rosé", stock: 0, minStock: 10 },
 ];
 
-const movements = [
-  ["Ausgabe", "Cava Hills", "Consum · 5 Kartons", "Heute, 09:42", "rose"],
-  ["Wareneingang", "Pinot Noir", "Zentrallager · 24 Kartons", "Gestern, 16:18", "green"],
-  ["Ausgabe", "Venus Rosé", "Nomad · 3 Kartons", "Gestern, 13:05", "rose"],
-  ["Inventur", "Chardonnay Réserve", "Zentrallager · korrigiert", "26.08.2026, 11:30", "blue"],
+const demoActivities: Activity[] = [
+  { type: "Ausgabe", wine: "Cava Hills", detail: "Consum · 5 Kartons", time: "Heute, 09:42", tone: "rose" },
+  { type: "Wareneingang", wine: "Pinot Noir", detail: "Zentrallager · 24 Kartons", time: "Gestern, 16:18", tone: "green" },
+  { type: "Ausgabe", wine: "Venus Rosé", detail: "Nomad · 3 Kartons", time: "Gestern, 13:05", tone: "rose" },
+  { type: "Inventur", wine: "Chardonnay Réserve", detail: "Zentrallager · korrigiert", time: "26.08.2026, 11:30", tone: "blue" },
 ];
 const navItems = ["Übersicht", "Bestand", "Bestellungen", "Wareneingang", "Inventur"];
 
@@ -35,6 +36,8 @@ export default function Home() {
   const [orderCart, setOrderCart] = useState<OrderItem[]>([]);
   const [orderView, setOrderView] = useState<"new" | "history">("new");
   const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const [pendingOrderCartons, setPendingOrderCartons] = useState(0);
+  const [activities, setActivities] = useState<Activity[]>(demoActivities);
   const [selectedWine, setSelectedWine] = useState<Wine | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [site, setSite] = useState("Consum");
@@ -46,12 +49,13 @@ export default function Home() {
   const [countedStocks, setCountedStocks] = useState<Record<string, string>>({});
   const [inventorySaving, setInventorySaving] = useState(false);
   const filteredWines = useMemo(() => inventory.filter((wine) => `${wine.name} ${wine.producer} ${wine.category}`.toLowerCase().includes(query.toLowerCase())), [inventory, query]);
-  const lowStock = 13;
-  const totalStock = 1806;
+  const lowStock = useMemo(() => inventory.filter((wine) => wine.stock <= wine.minStock).length, [inventory]);
+  const totalStock = useMemo(() => inventory.reduce((sum, wine) => sum + wine.stock, 0), [inventory]);
+  const totalValue = useMemo(() => inventory.reduce((sum, wine) => sum + wine.stock * (wine.purchasePrice ?? 0), 0), [inventory]);
   useEffect(() => {
     let mounted = true;
     Promise.all([
-      supabase.from("wines").select("id,name,producer,vintage,category,cartons_per_case").eq("active", true).order("name"),
+      supabase.from("wines").select("id,name,producer,vintage,category,purchase_price,cartons_per_case").eq("active", true).order("name"),
       supabase.from("locations").select("id,name"),
     ]).then(async ([wineResult, locationResult]) => {
       if (!mounted) return;
@@ -60,11 +64,13 @@ export default function Home() {
       setLocationIds(ids);
       const orderResult = await supabase.from("orders").select("id,status,created_at,approved_at,location:locations(name),order_items(cartons,wine:wines(name))").order("created_at", { ascending: false }).limit(30);
       if (orderResult.error) { showNotice("Bestellungen konnten nicht geladen werden"); }
-      else setOrders((orderResult.data ?? []).map((order) => ({ id: order.id, status: order.status, createdAt: order.created_at, approvedAt: order.approved_at, locationName: (order.location as unknown as { name: string } | null)?.name ?? "Unbekannter Betrieb", items: (order.order_items as unknown as { cartons: number; wine: { name: string }[] }[] ?? []).map((item) => ({ name: item.wine?.[0]?.name ?? "Unbekannter Wein", cartons: item.cartons })) })));
+      else { setOrders((orderResult.data ?? []).map((order) => ({ id: order.id, status: order.status, createdAt: order.created_at, approvedAt: order.approved_at, locationName: (order.location as unknown as { name: string } | null)?.name ?? "Unbekannter Betrieb", items: (order.order_items as unknown as { cartons: number; wine: { name: string }[] }[] ?? []).map((item) => ({ name: item.wine?.[0]?.name ?? "Unbekannter Wein", cartons: item.cartons })) }))); setPendingOrderCartons((orderResult.data ?? []).filter((order) => ["draft", "submitted"].includes(order.status)).reduce((sum, order) => sum + ((order.order_items as unknown as { cartons: number }[] ?? []).reduce((subtotal, item) => subtotal + item.cartons, 0)), 0)); }
+      const movementResult = await supabase.from("stock_movements").select("created_at,movement_type,cartons,note,wine:wines(name),from:locations!stock_movements_from_location_id(name),to:locations!stock_movements_to_location_id(name)").order("created_at", { ascending: false }).limit(5);
+      if (!movementResult.error && movementResult.data?.length) setActivities(movementResult.data.map((movement) => { const wine = (movement.wine as unknown as { name: string }[] | null)?.[0]?.name ?? "Unbekannter Wein"; const to = (movement.to as unknown as { name: string }[] | null)?.[0]?.name; const from = (movement.from as unknown as { name: string }[] | null)?.[0]?.name; const label = movement.movement_type === "wareneingang" ? "Wareneingang" : movement.movement_type === "inventur" ? "Inventur" : "Ausgabe"; return { type: label, wine, detail: `${to ?? from ?? "Zentrallager"} · ${movement.cartons} Kartons`, time: new Date(movement.created_at).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" }), tone: movement.movement_type === "wareneingang" ? "green" : movement.movement_type === "inventur" ? "blue" : "rose" }; }));
       const balanceResult = await supabase.from("stock_balances").select("wine_id,cartons").eq("location_id", ids.Zentrallager);
       if (balanceResult.error) { showNotice("Bestände konnten nicht geladen werden"); setDataLoading(false); return; }
       const balances = Object.fromEntries((balanceResult.data ?? []).map((balance) => [balance.wine_id, balance.cartons]));
-      setInventory((wineResult.data ?? []).map((wine) => ({ id: wine.id, name: wine.name, producer: wine.producer ?? "", vintage: wine.vintage ?? "–", category: wine.category, stock: balances[wine.id] ?? 0, minStock: 10, cartonsPerCase: wine.cartons_per_case ?? 6 })));
+      setInventory((wineResult.data ?? []).map((wine) => ({ id: wine.id, name: wine.name, producer: wine.producer ?? "", vintage: wine.vintage ?? "–", category: wine.category, stock: balances[wine.id] ?? 0, minStock: 10, purchasePrice: wine.purchase_price ?? 0, cartonsPerCase: wine.cartons_per_case ?? 6 })));
       setDataLoading(false);
     });
     return () => { mounted = false; };
@@ -150,14 +156,14 @@ export default function Home() {
           <div className="page-heading"><div><div className="eyebrow">Donnerstag, 27. August 2026</div><h1>Guten Morgen, Philipp</h1><p>Hier ist der aktuelle Überblick über euer Weinlager.</p></div><button className="primary-button" onClick={() => showNotice("Wareneingang kann im nächsten Schritt erfasst werden")}>+ Wareneingang erfassen</button></div>
           {notice && <div className="toast">✓ {notice}</div>}
           <div className="metric-grid">
-            <article className="metric-card"><div className="metric-top"><span>Bestand gesamt</span><span className="metric-icon plum">▦</span></div><strong>{totalStock}</strong><div className="metric-foot"><span className="trend">↗ 4.8%</span> <span>vs. letzter Monat</span></div></article>
-            <article className="metric-card"><div className="metric-top"><span>Warenwert</span><span className="metric-icon gold">◆</span></div><strong>CHF 123&apos;713</strong><div className="metric-foot"><span>Einstandspreise · Zentrallager</span></div></article>
+            <article className="metric-card"><div className="metric-top"><span>Bestand gesamt</span><span className="metric-icon plum">▦</span></div><strong>{dataLoading ? "–" : totalStock.toLocaleString("de-CH")}</strong><div className="metric-foot"><span className="trend">Live</span> <span>Zentrallager</span></div></article>
+            <article className="metric-card"><div className="metric-top"><span>Warenwert</span><span className="metric-icon gold">◆</span></div><strong>{dataLoading ? "–" : `CHF ${totalValue.toLocaleString("de-CH", { maximumFractionDigits: 0 })}`}</strong><div className="metric-foot"><span>Einstandspreise · Zentrallager</span></div></article>
             <article className="metric-card"><div className="metric-top"><span>Knapp am Lager</span><span className="metric-icon orange">!</span></div><strong>{lowStock}</strong><div className="metric-foot warning-text"><span>Benötigen Aufmerksamkeit</span><span className="arrow">→</span></div></article>
-            <article className="metric-card"><div className="metric-top"><span>Bestellte Kartons</span><span className="metric-icon blue">□</span></div><strong>313</strong><div className="metric-foot link-text" onClick={() => setActive("Bestellungen")}>Betriebsbestellungen <span className="arrow">→</span></div></article>
+            <article className="metric-card"><div className="metric-top"><span>Bestellte Kartons</span><span className="metric-icon blue">□</span></div><strong>{dataLoading ? "–" : pendingOrderCartons}</strong><div className="metric-foot link-text" onClick={() => setActive("Bestellungen")}>Offene Bestellungen <span className="arrow">→</span></div></article>
           </div>
           <div className="main-grid">
             <section className="panel stock-panel"><div className="panel-heading"><div><h2>Bestandsübersicht</h2><p>Die wichtigsten Weine im Zentrallager</p></div><button className="text-button" onClick={() => setActive("Bestand")}>Alle anzeigen <span>→</span></button></div><div className="search-row"><div className="search-box"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Wein oder Produzent suchen..." /></div><button className="filter-button">Filter <span>≡</span></button></div><div className="wine-table"><div className="table-row table-head"><span>Wein</span><span>Kategorie</span><span>Bestand</span><span>Status</span></div>{filteredWines.slice(0, 5).map((wine) => <div className="table-row" key={wine.name}><div className="wine-name"><div className="wine-bottle">♢</div><div><strong>{wine.name}</strong><small>{wine.producer} · {wine.vintage}</small></div></div><span className="category-pill">{wine.category}</span><span className="stock-number">{wine.stock} <small>Kartons</small></span><span className={wine.stock < wine.minStock ? "status-low" : "status-good"}><i />{wine.stock < wine.minStock ? "Niedrig" : "Gut"}</span></div>)}</div></section>
-            <section className="panel activity-panel"><div className="panel-heading"><div><h2>Letzte Aktivitäten</h2><p>Aktuelle Lagerbewegungen</p></div><button className="more-button">•••</button></div><div className="activity-list">{movements.map((movement) => <div className="activity" key={`${movement[1]}-${movement[3]}`}><div className={`activity-icon ${movement[4]}`}>{movement[4] === "green" ? "↓" : movement[4] === "blue" ? "◉" : "↑"}</div><div className="activity-copy"><strong>{movement[1]}</strong><span>{movement[0]} · {movement[2]}</span></div><time>{movement[3]}</time></div>)}</div><button className="activity-footer" onClick={() => setActive("Bestand")}>Gesamte Historie ansehen <span>→</span></button></section>
+            <section className="panel activity-panel"><div className="panel-heading"><div><h2>Letzte Aktivitäten</h2><p>Aktuelle Lagerbewegungen</p></div><button className="more-button">•••</button></div><div className="activity-list">{activities.map((activity) => <div className="activity" key={`${activity.wine}-${activity.time}`}><div className={`activity-icon ${activity.tone}`}>{activity.tone === "green" ? "↓" : activity.tone === "blue" ? "◉" : "↑"}</div><div className="activity-copy"><strong>{activity.wine}</strong><span>{activity.type} · {activity.detail}</span></div><time>{activity.time}</time></div>)}</div><button className="activity-footer" onClick={() => setActive("Bestand")}>Gesamte Historie ansehen <span>→</span></button></section>
           </div>
           <section className="quick-actions"><div><h2>Schnellzugriff</h2><p>Häufig verwendete Aktionen</p></div><div className="action-grid"><button onClick={() => showNotice("Bestellung für einen Betrieb wird vorbereitet")}><span className="action-icon purple">＋</span><span><strong>Neue Bestellung</strong><small>Für einen Betrieb erfassen</small></span><b>→</b></button><button onClick={() => showNotice("Inventur kann im nächsten Schritt gestartet werden")}><span className="action-icon yellow">◉</span><span><strong>Inventur starten</strong><small>Bestände überprüfen</small></span><b>→</b></button><button onClick={() => showNotice("Wein-Stammdaten kommen als nächster Baustein")}><span className="action-icon pink">♢</span><span><strong>Wein hinzufügen</strong><small>Neuen Wein anlegen</small></span><b>→</b></button></div></section>
           <div className="demo-note">Datenstand aus Weinlager_VB_Zentrale · 27. August 2026 · Mindestbestand wird im nächsten Schritt konfigurierbar</div>
