@@ -85,6 +85,178 @@ body {
   }
 }
 
+.business-catalog {
+  padding-bottom: 24px;
+}
+
+.business-catalog .inventory-groups {
+  margin-top: 18px;
+}
+
+.business-catalog .inventory-group {
+  margin-bottom: 0;
+}
+
+.business-wine-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+}
+
+.business-wine-main > div:last-child {
+  min-width: 0;
+}
+
+.business-wine-main strong,
+.business-wine-main small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorite-button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #a58b95;
+  font-size: 19px;
+  line-height: 1;
+  padding: 2px;
+}
+
+.favorite-button:hover,
+.favorite-button:focus-visible {
+  color: #9d5b76;
+}
+
+.favorite-filter {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  padding-bottom: 2px;
+}
+
+.favorite-filter button {
+  border: 1px solid #e5dcde;
+  border-radius: 4px;
+  background: #fff;
+  color: #80616e;
+  padding: 8px 11px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.favorite-filter button.active {
+  border-color: var(--plum);
+  background: var(--plum);
+  color: #fff;
+}
+
+.business-wine.out-of-stock {
+  opacity: .48;
+  background: #fafafa;
+}
+
+.business-monthly {
+  padding-bottom: 0;
+}
+
+.monthly-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 23px;
+}
+
+.monthly-toolbar label {
+  display: grid;
+  gap: 6px;
+  color: #756d72;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.monthly-toolbar input {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fbfaf9;
+  padding: 9px 10px;
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.business-document-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: start;
+  border-top: 1px solid #eee9e8;
+  border-bottom: 1px solid #eee9e8;
+  padding: 20px 0;
+}
+
+.business-document-head h2 {
+  margin: 0;
+  font-family: "Boucherie Block", Georgia, serif;
+  font-size: 23px;
+  color: var(--plum);
+}
+
+.business-document-head p {
+  margin: 6px 0 0;
+  color: #81777b;
+  font-size: 10px;
+}
+
+.business-document-total {
+  min-width: 150px;
+  text-align: right;
+}
+
+.business-document-total span,
+.business-document-total strong,
+.business-document-total small {
+  display: block;
+}
+
+.business-document-total span {
+  color: #91878b;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.business-document-total strong {
+  margin-top: 4px;
+  color: var(--plum);
+  font-size: 20px;
+}
+
+.business-document-total small {
+  margin-top: 4px;
+  color: #91878b;
+  font-size: 9px;
+}
+
+@media (max-width: 760px) {
+  .monthly-toolbar,
+  .business-document-head {
+    display: block;
+  }
+
+  .monthly-toolbar .primary-button {
+    width: 100%;
+    margin-top: 14px;
+  }
+
+  .business-document-total {
+    margin-top: 18px;
+    text-align: left;
+  }
+}
+
 .theme-toggle {
   position: fixed;
   right: 18px;
@@ -278,6 +450,26 @@ html[data-theme="dark"] .accounting-total {
   background: #30272c;
   border-color: #51434a;
   color: #d5c5ca;
+}
+
+html[data-theme="dark"] .favorite-filter button,
+html[data-theme="dark"] .monthly-toolbar input {
+  background: #30272c;
+  border-color: #55474e;
+  color: #eee8e9;
+}
+
+html[data-theme="dark"] .business-wine.out-of-stock {
+  background: #211c1f;
+}
+
+html[data-theme="dark"] .business-document-head {
+  border-color: #51434a;
+}
+
+html[data-theme="dark"] .business-document-head h2,
+html[data-theme="dark"] .business-document-total strong {
+  color: #e2a8ba;
 }
 
 html[data-theme="dark"] .metric-icon.plum,
