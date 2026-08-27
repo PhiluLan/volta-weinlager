@@ -85,6 +85,219 @@ body {
   }
 }
 
+.theme-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid #ddd6d7;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .94);
+  box-shadow: 0 5px 18px rgba(47, 35, 41, .12);
+  backdrop-filter: blur(8px);
+}
+
+.theme-toggle span {
+  padding: 0 7px;
+  color: #8b8185;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.theme-toggle button {
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #82777c;
+  padding: 6px 8px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.theme-toggle button.active {
+  background: var(--plum);
+  color: #fff;
+}
+
+html[data-theme="dark"] body {
+  background: #191618;
+  color: #eee8e9;
+}
+
+html[data-theme="dark"] .theme-toggle {
+  border-color: #51454a;
+  background: rgba(40, 33, 37, .96);
+  box-shadow: 0 5px 22px rgba(0, 0, 0, .3);
+}
+
+html[data-theme="dark"] .theme-toggle span,
+html[data-theme="dark"] .theme-toggle button {
+  color: #b9adb1;
+}
+
+html[data-theme="dark"] .theme-toggle button.active {
+  background: #ad7188;
+  color: #1f171b;
+}
+
+html[data-theme="dark"] .app-shell,
+html[data-theme="dark"] .inventory-page,
+html[data-theme="dark"] .orders-page,
+html[data-theme="dark"] .business-page,
+html[data-theme="dark"] .auth-page {
+  background: #191618;
+}
+
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .inventory-top,
+html[data-theme="dark"] .business-top,
+html[data-theme="dark"] .auth-card,
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .metric-card,
+html[data-theme="dark"] .quick-actions,
+html[data-theme="dark"] .inventory-panel,
+html[data-theme="dark"] .business-cart,
+html[data-theme="dark"] .incoming-card,
+html[data-theme="dark"] .order-cart,
+html[data-theme="dark"] .settings-card,
+html[data-theme="dark"] .settings-info,
+html[data-theme="dark"] .accounting-summary > div {
+  background: #272125;
+  border-color: #43373d;
+}
+
+html[data-theme="dark"] .brand-name,
+html[data-theme="dark"] .page-heading h1,
+html[data-theme="dark"] .auth-card h1,
+html[data-theme="dark"] .panel-heading h2,
+html[data-theme="dark"] .quick-actions h2,
+html[data-theme="dark"] .settings-card h2,
+html[data-theme="dark"] .settings-info h2,
+html[data-theme="dark"] .accounting-report-head h2,
+html[data-theme="dark"] .order-cart h2,
+html[data-theme="dark"] .business-cart h2,
+html[data-theme="dark"] .incoming-card h2,
+html[data-theme="dark"] .master-form h2,
+html[data-theme="dark"] .movement-modal h2 {
+  color: #f2e9eb;
+}
+
+html[data-theme="dark"] .page-heading p,
+html[data-theme="dark"] .panel-heading p,
+html[data-theme="dark"] .settings-card p,
+html[data-theme="dark"] .settings-info p,
+html[data-theme="dark"] .accounting-report-head p,
+html[data-theme="dark"] .incoming-intro,
+html[data-theme="dark"] .order-note,
+html[data-theme="dark"] .demo-note {
+  color: #aa9da2;
+}
+
+html[data-theme="dark"] .nav-item,
+html[data-theme="dark"] .back-button,
+html[data-theme="dark"] .breadcrumb,
+html[data-theme="dark"] .supplier,
+html[data-theme="dark"] .business-user,
+html[data-theme="dark"] .text-button,
+html[data-theme="dark"] .more-button,
+html[data-theme="dark"] .filter-button,
+html[data-theme="dark"] .secondary-button {
+  color: #c2b4b9;
+}
+
+html[data-theme="dark"] .nav-item:hover,
+html[data-theme="dark"] .nav-item.active,
+html[data-theme="dark"] .user-button:hover {
+  background: #3b2d34;
+  color: #f0d8df;
+}
+
+html[data-theme="dark"] .primary-button {
+  background: #ad7188;
+  color: #21181d;
+}
+
+html[data-theme="dark"] .primary-button:hover {
+  background: #c0849c;
+}
+
+html[data-theme="dark"] .secondary-button,
+html[data-theme="dark"] .filter-button,
+html[data-theme="dark"] .history-filter {
+  background: #30272c;
+  border-color: #55474e;
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] .search-box,
+html[data-theme="dark"] .empty-cart {
+  background: #211b1f;
+  border-color: #51434a;
+  color: #eee8e9;
+}
+
+html[data-theme="dark"] .wine-table .table-row,
+html[data-theme="dark"] .inventory-row,
+html[data-theme="dark"] .activity,
+html[data-theme="dark"] .history-row,
+html[data-theme="dark"] .business-order,
+html[data-theme="dark"] .order-history-item,
+html[data-theme="dark"] .cart-item {
+  border-color: #3f343a;
+}
+
+html[data-theme="dark"] .inventory-group,
+html[data-theme="dark"] .delivery-note,
+html[data-theme="dark"] .accounting-report {
+  background: #272125;
+  border-color: #51434a;
+}
+
+html[data-theme="dark"] .inventory-group .inventory-row.inventory-head,
+html[data-theme="dark"] .delivery-note-header,
+html[data-theme="dark"] .accounting-head {
+  background: #30272c;
+}
+
+html[data-theme="dark"] .inventory-group-sparkling .inventory-group-heading { background: #4a3d2f; }
+html[data-theme="dark"] .inventory-group-white .inventory-group-heading { background: #3d4530; }
+html[data-theme="dark"] .inventory-group-red .inventory-group-heading { background: #4a3038; }
+html[data-theme="dark"] .inventory-group-other .inventory-group-heading { background: #303e43; }
+
+html[data-theme="dark"] .inventory-group .inventory-row.out-of-stock {
+  background: #211c1f;
+}
+
+html[data-theme="dark"] .accounting-total {
+  background: #30272c;
+  border-color: #51434a;
+  color: #d5c5ca;
+}
+
+html[data-theme="dark"] .metric-icon.plum,
+html[data-theme="dark"] .action-icon.purple,
+html[data-theme="dark"] .settings-icon {
+  background: #44303a;
+  color: #e2a8ba;
+}
+
+@media (max-width: 760px) {
+  .theme-toggle {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .theme-toggle span {
+    display: none;
+  }
+}
+
 .grouped-inventory {
   padding-bottom: 24px;
 }
