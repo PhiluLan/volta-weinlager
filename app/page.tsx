@@ -27,10 +27,6 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
   const [inventory, setInventory] = useState(wines);
-  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [email, setEmail] = useState("");
-  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [locationIds, setLocationIds] = useState<Record<string, string>>({});
   const [selectedWine, setSelectedWine] = useState<Wine | null>(null);
@@ -40,17 +36,6 @@ export default function Home() {
   const lowStock = 13;
   const totalStock = 1806;
   useEffect(() => {
-    let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
-      if (mounted) { setSessionEmail(data.session?.user.email ?? null); setAuthLoading(false); }
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      if (mounted) setSessionEmail(currentSession?.user.email ?? null);
-    });
-    return () => { mounted = false; listener.subscription.unsubscribe(); };
-  }, []);
-  useEffect(() => {
-    if (!sessionEmail) return;
     let mounted = true;
     Promise.all([
       supabase.from("wines").select("id,name,producer,vintage,category,cartons_per_case").eq("active", true).order("name"),
@@ -67,13 +52,7 @@ export default function Home() {
       setDataLoading(false);
     });
     return () => { mounted = false; };
-  }, [sessionEmail]);
-  async function sendMagicLink(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: window.location.origin } });
-    if (error) showNotice(error.message); else setMagicLinkSent(true);
-  }
-  async function signOut() { await supabase.auth.signOut(); setActive("Übersicht"); }
+  }, []);
   async function saveMovement() {
     if (!selectedWine?.id || !locationIds.Zentrallager || !locationIds[site]) return;
     const { error } = await supabase.rpc("record_stock_movement", { p_wine_id: selectedWine.id, p_from_location_id: locationIds.Zentrallager, p_to_location_id: locationIds[site], p_cartons: quantity, p_movement_type: "ausgabe", p_note: null });
@@ -83,8 +62,6 @@ export default function Home() {
     showNotice(`${quantity} Karton ${selectedWine.name} an ${site} ausgegeben`);
   }
   function showNotice(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 3500); }
-  if (authLoading) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Volta Weinlager</h1><p>Verbindung wird hergestellt …</p></div></main>;
-  if (!sessionEmail) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><div className="eyebrow">Internes Weinlager</div><h1>Willkommen zurück</h1><p>Gib deine E-Mail-Adresse ein. Wir schicken dir einen sicheren Login-Link.</p>{magicLinkSent ? <div className="auth-success">✓ Login-Link versendet<br /><small>Prüfe dein Postfach und öffne den Link.</small></div> : <form onSubmit={sendMagicLink}><label>E-Mail-Adresse<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@voltabraeu.ch" /></label><button className="primary-button auth-submit" type="submit">Login-Link senden</button></form>}<div className="auth-note">Geschützt durch Supabase Auth</div></div></main>;
   if (active === "Bestand") {
     return <main className="inventory-page"><header className="inventory-top"><button className="back-button" onClick={() => setActive("Übersicht")}>← Übersicht</button><div className="top-actions"><button className="icon-button" aria-label="Benachrichtigungen">♧<i /></button><div className="top-avatar">PS</div></div></header><div className="inventory-content"><div className="page-heading"><div><div className="eyebrow">Zentrallager · Supabase Live-Daten</div><h1>Bestand</h1><p>61 Artikelpositionen aus der zentralen Weinlager-Liste.</p></div><button className="primary-button" onClick={() => showNotice("Wareneingang kommt als nächster Workflow")}>+ Wareneingang erfassen</button></div><div className="inventory-summary"><div><strong>1’806</strong><span>Kartons Gesamtbestand</span></div><div><strong>CHF 123’713</strong><span>Warenwert</span></div><div><strong>13</strong><span>Artikel ohne Bestand</span></div><div><strong>313</strong><span>Bestellte Kartons</span></div></div><section className="inventory-panel"><div className="panel-heading"><div><h2>Alle Artikel</h2><p>{dataLoading ? "Bestände werden geladen …" : "Live aus Supabase · Ausgabe wird dauerhaft protokolliert."}</p></div><span className="snapshot-badge">Live verbunden</span></div><div className="search-row"><div className="search-box"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Wein oder Produzent suchen..." /></div><button className="filter-button">Alle Kategorien <span>≡</span></button></div><div className="inventory-table"><div className="inventory-row inventory-head"><span>Artikel</span><span>Kategorie</span><span>Lieferant</span><span>Bestand</span><span>Aktion</span></div>{filteredWines.map((wine) => <div className="inventory-row" key={wine.name}><div className="wine-name"><div className="wine-bottle">♢</div><div><strong>{wine.name}</strong><small>{wine.vintage} · {wine.stock * (wine.cartonsPerCase ?? 6)} Einzelflaschen</small></div></div><span className="category-pill">{wine.category}</span><span className="supplier">{wine.producer}</span><strong>{wine.stock} <small className="unit-label">Kartons</small></strong><button className="row-action" onClick={() => { setSelectedWine(wine); setQuantity(1); }}>Ausgabe →</button></div>)}</div></section><div className="demo-note">Quelle: Weinlager_VB_Zentrale (1).xlsx · Mindestbestände werden als nächster Schritt konfigurierbar</div></div>{selectedWine && <div className="modal-backdrop" role="presentation" onClick={() => setSelectedWine(null)}><section className="movement-modal" role="dialog" aria-modal="true" aria-labelledby="movement-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Schliessen" onClick={() => setSelectedWine(null)}>×</button><div className="eyebrow">Lagerbewegung · Ausgabe</div><h2 id="movement-title">{selectedWine.name}</h2><p className="modal-subtitle">Bestand aktuell: <strong>{selectedWine.stock} Kartons</strong></p><label>Betrieb<select value={site} onChange={(event) => setSite(event.target.value)}><option>Consum</option><option>VB</option><option>Nomad</option><option>Krafft</option><option>Silo</option></select></label><label>Anzahl Kartons<input type="number" min="1" max={selectedWine.stock} value={quantity} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))} /></label>{quantity > selectedWine.stock && <div className="form-error">Nicht genügend Bestand vorhanden.</div>}<button className="primary-button modal-submit" disabled={quantity > selectedWine.stock} onClick={saveMovement}>Ausgabe speichern</button></section></div>}</main>;
   }
@@ -95,7 +72,7 @@ export default function Home() {
         <div className="brand"><div className="brand-mark">VB</div><div><div className="brand-name">Volta Weinlager</div><div className="brand-sub">Zentrales Lager</div></div></div>
         <div className="nav-label">Arbeitsbereich</div>
         <nav>{navItems.map((item, index) => <button key={item} className={`nav-item ${active === item ? "active" : ""}`} onClick={() => setActive(item)}><span className="nav-icon">{["⌂", "▦", "□", "↓", "◉"][index]}</span>{item}{item === "Bestellungen" && <span className="nav-count">2</span>}</button>)}</nav>
-        <div className="sidebar-bottom"><div className="nav-label">Verwaltung</div><button className="nav-item"><span className="nav-icon">⚙</span>Einstellungen</button><button className="user-chip user-button" onClick={signOut}><div className="avatar">PS</div><div><strong>{sessionEmail}</strong><span>Abmelden</span></div><span className="dots">•••</span></button></div>
+        <div className="sidebar-bottom"><div className="nav-label">Verwaltung</div><button className="nav-item"><span className="nav-icon">⚙</span>Einstellungen</button><div className="user-chip"><div className="avatar">PS</div><div><strong>Philipp</strong><span>MVP-Modus</span></div><span className="dots">•••</span></div></div>
       </aside>
       <section className="content">
         <header className="topbar"><div className="breadcrumb">Volta Bräu <span>/</span> {active}</div><div className="top-actions"><button className="icon-button" aria-label="Benachrichtigungen" onClick={() => showNotice("Keine neuen Benachrichtigungen")}>♧<i /></button><div className="top-avatar">PS</div></div></header>

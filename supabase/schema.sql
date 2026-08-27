@@ -104,3 +104,15 @@ end;
 $$;
 
 grant execute on function public.record_stock_movement(uuid, uuid, uuid, integer, text, text) to authenticated;
+
+-- Temporärer MVP-Zugriff ohne Login. Vor einer öffentlichen Veröffentlichung entfernen.
+grant select on table public.locations, public.wines, public.stock_balances, public.stock_movements to anon;
+grant insert, update on table public.stock_balances to anon;
+grant insert on table public.stock_movements to anon;
+create policy "mvp anon read locations" on public.locations for select to anon using (true);
+create policy "mvp anon read wines" on public.wines for select to anon using (true);
+create policy "mvp anon read balances" on public.stock_balances for select to anon using (true);
+create policy "mvp anon read movements" on public.stock_movements for select to anon using (true);
+create policy "mvp anon update balances" on public.stock_balances for update to anon using (true) with check (true);
+create policy "mvp anon insert balances" on public.stock_balances for insert to anon with check (true);
+create policy "mvp anon write movements" on public.stock_movements for insert to anon with check (created_by is null);
