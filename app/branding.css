@@ -342,6 +342,7 @@ body {
 
 .accounting-report {
   padding-bottom: 0;
+  overflow: hidden;
 }
 
 .accounting-report-head {
@@ -350,6 +351,11 @@ body {
   gap: 16px;
   align-items: flex-start;
   padding-bottom: 16px;
+}
+
+.accounting-report-head h2 {
+  font-family: "Boucherie Block", Georgia, serif;
+  font-size: 22px;
 }
 
 .accounting-actions {
@@ -376,12 +382,28 @@ body {
 
 .accounting-row {
   display: grid;
-  grid-template-columns: 1fr 1.8fr 120px;
+  grid-template-columns: 1fr 1.8fr 85px 105px 120px;
   gap: 16px;
   align-items: start;
   border-top: 1px solid #f0eceb;
   padding: 13px 0;
   font-size: 10px;
+}
+
+.accounting-row:not(.accounting-head) {
+  min-height: 54px;
+}
+
+.accounting-row:not(.accounting-head) > :nth-child(3),
+.accounting-row:not(.accounting-head) > :nth-child(4) {
+  color: #63565c;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.accounting-row:not(.accounting-head) > :nth-child(5) {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .accounting-head {
@@ -429,6 +451,8 @@ body {
   .accounting-report:not(.accounting-print-target) { display: none !important; }
   .accounting-print-target { border: 0 !important; }
   .accounting-controls, .accounting-summary { display: none !important; }
+  .accounting-print-target .accounting-report-head { border-bottom: 1px solid #bbb; }
+  .accounting-print-target .accounting-row { grid-template-columns: 1fr 1.8fr 85px 105px 120px; }
 }
 
 @media (max-width: 760px) {
@@ -473,6 +497,10 @@ body {
   }
 
   .accounting-row > :nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  .accounting-row > :nth-child(4) {
     grid-column: 1 / -1;
   }
 
