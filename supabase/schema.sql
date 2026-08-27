@@ -16,6 +16,7 @@ create table if not exists public.wines (
   bottle_size_l numeric(4,2),
   cartons_per_case integer,
   purchase_price numeric(10,2),
+  min_stock integer not null default 10 check (min_stock >= 0),
   active boolean not null default true,
   created_at timestamptz not null default now(),
   unique (name, producer, vintage)
@@ -107,10 +108,13 @@ grant execute on function public.record_stock_movement(uuid, uuid, uuid, integer
 
 -- Temporärer MVP-Zugriff ohne Login. Vor einer öffentlichen Veröffentlichung entfernen.
 grant select on table public.locations, public.wines, public.stock_balances, public.stock_movements to anon;
+grant insert, update on table public.wines to anon;
 grant insert, update on table public.stock_balances to anon;
 grant insert on table public.stock_movements to anon;
 create policy "mvp anon read locations" on public.locations for select to anon using (true);
 create policy "mvp anon read wines" on public.wines for select to anon using (true);
+create policy "mvp anon insert wines" on public.wines for insert to anon with check (true);
+create policy "mvp anon update wines" on public.wines for update to anon using (true) with check (true);
 create policy "mvp anon read balances" on public.stock_balances for select to anon using (true);
 create policy "mvp anon read movements" on public.stock_movements for select to anon using (true);
 create policy "mvp anon update balances" on public.stock_balances for update to anon using (true) with check (true);
