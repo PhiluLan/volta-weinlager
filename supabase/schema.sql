@@ -219,3 +219,44 @@ end;
 $$;
 revoke execute on function public.complete_order(uuid) from anon;
 grant execute on function public.complete_order(uuid) to authenticated;
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated;
+create or replace function private.submit_order(p_order_id uuid)
+returns void language plpgsql security definer set search_path = public, private
+as $$
+declare v_order public.orders; v_central_id uuid; v_item record; v_user_location uuid;
+begin
+  if (select auth.uid()) is null then raise exception 'Anmeldung erforderlich'; end if;
+  select location_id into v_user_location from public.profiles where id = (select auth.uid()) and role = 'user';
+  if v_user_location is null then raise exception 'Nur Betriebsbenutzer dürfen Bestellungen übermitteln'; end if;
+  select * into v_order from public.orders where id = p_order_id and status = 'submitted' and location_id = v_user_location for update;
+  if not found then raise exception 'Bestellung nicht gefunden oder nicht deinem Betrieb zugeordnet'; end if;
+  select id into v_central_id from public.locations where name = 'Zentrallager';
+  for v_item in select wine_id, cartons from public.order_items where order_id = p_order_id loop
+    perform public.record_stock_movement(v_item.wine_id, v_central_id, v_order.location_id, v_item.cartons, 'ausgabe', 'Bestellung übermittelt ' || p_order_id::text);
+  end loop;
+end;
+$$;
+revoke all on function private.submit_order(uuid) from public;
+grant execute on function private.submit_order(uuid) to authenticated;
+create or replace function public.submit_order(p_order_id uuid)
+returns void language plpgsql security invoker set search_path = public
+as $$
+begin
+  perform private.submit_order(p_order_id);
+end;
+$$;
+revoke execute on function public.submit_order(uuid) from public, anon;
+grant execute on function public.submit_order(uuid) to authenticated;
+create or replace function public.complete_order(p_order_id uuid)
+returns void language plpgsql security invoker set search_path = public
+as $$
+begin
+  if (select auth.jwt() ->> 'email') <> 'planger@voltabraeu.ch' then raise exception 'Nur der Super-Admin darf Bestellungen abschliessen'; end if;
+  update public.orders set status = 'delivered', approved_at = now() where id = p_order_id and status = 'submitted';
+  if not found then raise exception 'Bestellung nicht gefunden oder bereits erledigt'; end if;
+end;
+$$;
+revoke execute on function public.complete_order(uuid) from anon;
+grant execute on function public.complete_order(uuid) to authenticated;

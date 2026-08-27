@@ -46,7 +46,9 @@ export default function BetriebPage() {
     if (error || !order) { setNotice(error?.message ?? "Bestellung konnte nicht angelegt werden"); return; }
     const { error: itemError } = await supabase.from("order_items").insert(Object.entries(cart).map(([wineId, cartons]) => ({ order_id: order.id, wine_id: wineId, cartons })));
     if (itemError) { setNotice(itemError.message); return; }
-    setCart({}); setView("history"); setNotice("Bestellung eingereicht");
+    const { error: submitError } = await supabase.rpc("submit_order", { p_order_id: order.id });
+    if (submitError) { setNotice(submitError.message); return; }
+    setWines((items) => items.map((wine) => ({ ...wine, stock: wine.stock - (cart[wine.id] ?? 0) }))); setCart({}); setView("history"); setNotice("Bestellung übermittelt und Bestand aktualisiert");
     const { data: ownOrders } = await supabase.from("orders").select("id,status,created_at,order_items(cartons,wine:wines(name))").eq("location_id", profile.location_id).order("created_at", { ascending: false });
     setOrders((ownOrders ?? []) as Order[]);
   }
