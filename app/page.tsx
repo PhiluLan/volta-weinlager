@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 type Wine = { id?: string; name: string; producer: string; vintage: string; category: string; stock: number; minStock: number; cartonsPerCase?: number };
+type OrderItem = { wineId: string; name: string; cartons: number };
 
 const wines: Wine[] = [
   { name: "Prosecco Stefany Bio DOC", producer: "Il Grappolo", vintage: "–", category: "Schaumwein", stock: 14, minStock: 10 },
@@ -29,6 +30,8 @@ export default function Home() {
   const [inventory, setInventory] = useState(wines);
   const [dataLoading, setDataLoading] = useState(true);
   const [locationIds, setLocationIds] = useState<Record<string, string>>({});
+  const [orderSite, setOrderSite] = useState("Consum");
+  const [orderCart, setOrderCart] = useState<OrderItem[]>([]);
   const [selectedWine, setSelectedWine] = useState<Wine | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [site, setSite] = useState("Consum");
@@ -61,9 +64,28 @@ export default function Home() {
     setSelectedWine(null);
     showNotice(`${quantity} Karton ${selectedWine.name} an ${site} ausgegeben`);
   }
+  function addToOrder(wine: Wine) {
+    if (!wine.id) return;
+    setOrderCart((items) => items.some((item) => item.wineId === wine.id) ? items.map((item) => item.wineId === wine.id ? { ...item, cartons: item.cartons + 1 } : item) : [...items, { wineId: wine.id, name: wine.name, cartons: 1 }]);
+  }
+  async function approveOrder() {
+    if (!locationIds[orderSite] || orderCart.length === 0) return;
+    const { data: order, error: orderError } = await supabase.from("orders").insert({ location_id: locationIds[orderSite], status: "submitted", note: null }).select("id").single();
+    if (orderError || !order) { showNotice(orderError?.message ?? "Bestellung konnte nicht angelegt werden"); return; }
+    const { error: itemsError } = await supabase.from("order_items").insert(orderCart.map((item) => ({ order_id: order.id, wine_id: item.wineId, cartons: item.cartons })));
+    if (itemsError) { showNotice(itemsError.message); return; }
+    const { error: approvalError } = await supabase.rpc("approve_order", { p_order_id: order.id });
+    if (approvalError) { showNotice(approvalError.message); return; }
+    setInventory((items) => items.map((wine) => { const item = orderCart.find((entry) => entry.wineId === wine.id); return item ? { ...wine, stock: wine.stock - item.cartons } : wine; }));
+    setOrderCart([]);
+    showNotice(`Bestellung für ${orderSite} freigegeben`);
+  }
   function showNotice(message: string) { setNotice(message); window.setTimeout(() => setNotice(""), 3500); }
   if (active === "Bestand") {
     return <main className="inventory-page"><header className="inventory-top"><button className="back-button" onClick={() => setActive("Übersicht")}>← Übersicht</button><div className="top-actions"><button className="icon-button" aria-label="Benachrichtigungen">♧<i /></button><div className="top-avatar">PS</div></div></header><div className="inventory-content"><div className="page-heading"><div><div className="eyebrow">Zentrallager · Supabase Live-Daten</div><h1>Bestand</h1><p>61 Artikelpositionen aus der zentralen Weinlager-Liste.</p></div><button className="primary-button" onClick={() => showNotice("Wareneingang kommt als nächster Workflow")}>+ Wareneingang erfassen</button></div><div className="inventory-summary"><div><strong>1’806</strong><span>Kartons Gesamtbestand</span></div><div><strong>CHF 123’713</strong><span>Warenwert</span></div><div><strong>13</strong><span>Artikel ohne Bestand</span></div><div><strong>313</strong><span>Bestellte Kartons</span></div></div><section className="inventory-panel"><div className="panel-heading"><div><h2>Alle Artikel</h2><p>{dataLoading ? "Bestände werden geladen …" : "Live aus Supabase · Ausgabe wird dauerhaft protokolliert."}</p></div><span className="snapshot-badge">Live verbunden</span></div><div className="search-row"><div className="search-box"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Wein oder Produzent suchen..." /></div><button className="filter-button">Alle Kategorien <span>≡</span></button></div><div className="inventory-table"><div className="inventory-row inventory-head"><span>Artikel</span><span>Kategorie</span><span>Lieferant</span><span>Bestand</span><span>Aktion</span></div>{filteredWines.map((wine) => <div className="inventory-row" key={wine.name}><div className="wine-name"><div className="wine-bottle">♢</div><div><strong>{wine.name}</strong><small>{wine.vintage} · {wine.stock * (wine.cartonsPerCase ?? 6)} Einzelflaschen</small></div></div><span className="category-pill">{wine.category}</span><span className="supplier">{wine.producer}</span><strong>{wine.stock} <small className="unit-label">Kartons</small></strong><button className="row-action" onClick={() => { setSelectedWine(wine); setQuantity(1); }}>Ausgabe →</button></div>)}</div></section><div className="demo-note">Quelle: Weinlager_VB_Zentrale (1).xlsx · Mindestbestände werden als nächster Schritt konfigurierbar</div></div>{selectedWine && <div className="modal-backdrop" role="presentation" onClick={() => setSelectedWine(null)}><section className="movement-modal" role="dialog" aria-modal="true" aria-labelledby="movement-title" onClick={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Schliessen" onClick={() => setSelectedWine(null)}>×</button><div className="eyebrow">Lagerbewegung · Ausgabe</div><h2 id="movement-title">{selectedWine.name}</h2><p className="modal-subtitle">Bestand aktuell: <strong>{selectedWine.stock} Kartons</strong></p><label>Betrieb<select value={site} onChange={(event) => setSite(event.target.value)}><option>Consum</option><option>VB</option><option>Nomad</option><option>Krafft</option><option>Silo</option></select></label><label>Anzahl Kartons<input type="number" min="1" max={selectedWine.stock} value={quantity} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))} /></label>{quantity > selectedWine.stock && <div className="form-error">Nicht genügend Bestand vorhanden.</div>}<button className="primary-button modal-submit" disabled={quantity > selectedWine.stock} onClick={saveMovement}>Ausgabe speichern</button></section></div>}</main>;
+  }
+  if (active === "Bestellungen") {
+    return <main className="orders-page"><header className="inventory-top"><button className="back-button" onClick={() => setActive("Übersicht")}>← Übersicht</button><div className="top-actions"><div className="top-avatar">PS</div></div></header><div className="orders-content"><div className="page-heading"><div><div className="eyebrow">Betriebsbestellung · Supabase Live-Daten</div><h1>Neue Bestellung</h1><p>Weine auswählen, Betrieb bestimmen und direkt freigeben.</p></div></div><div className="order-layout"><section className="inventory-panel"><div className="panel-heading"><div><h2>Wein auswählen</h2><p>{dataLoading ? "Bestand wird geladen …" : `${inventory.length} Artikel im Zentrallager`}</p></div></div><div className="search-row"><div className="search-box"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Wein suchen..." /></div></div><div className="order-wines">{filteredWines.map((wine) => <button className="order-wine" key={wine.name} onClick={() => addToOrder(wine)} disabled={!wine.stock}><span className="wine-bottle">♢</span><span><strong>{wine.name}</strong><small>{wine.producer} · {wine.stock} Kartons verfügbar</small></span><b>＋</b></button>)}</div></section><aside className="order-cart"><div className="eyebrow">Bestellentwurf</div><h2>{orderSite}</h2><label>Betrieb<select value={orderSite} onChange={(event) => setOrderSite(event.target.value)}><option>Consum</option><option>VB</option><option>Nomad</option><option>Krafft</option><option>Silo</option></select></label><div className="cart-items">{orderCart.length === 0 ? <p className="empty-cart">Noch keine Weine ausgewählt.</p> : orderCart.map((item) => <div className="cart-item" key={item.wineId}><div><strong>{item.name}</strong><small>{item.cartons} Kartons</small></div><div className="cart-controls"><button onClick={() => setOrderCart((items) => items.map((entry) => entry.wineId === item.wineId ? { ...entry, cartons: Math.max(1, entry.cartons - 1) } : entry))}>−</button><span>{item.cartons}</span><button onClick={() => setOrderCart((items) => items.map((entry) => entry.wineId === item.wineId ? { ...entry, cartons: entry.cartons + 1 } : entry))}>＋</button></div></div>)}</div><button className="primary-button order-submit" disabled={!orderCart.length || dataLoading} onClick={approveOrder}>Bestellung freigeben</button><p className="order-note">Bei der Freigabe wird der Zentrallagerbestand automatisch reduziert und die Bewegung protokolliert.</p></aside></div></div></main>;
   }
 
   return (

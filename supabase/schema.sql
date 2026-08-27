@@ -115,4 +115,50 @@ create policy "mvp anon read balances" on public.stock_balances for select to an
 create policy "mvp anon read movements" on public.stock_movements for select to anon using (true);
 create policy "mvp anon update balances" on public.stock_balances for update to anon using (true) with check (true);
 create policy "mvp anon insert balances" on public.stock_balances for insert to anon with check (true);
+
+create table if not exists public.orders (
+  id uuid primary key default gen_random_uuid(),
+  location_id uuid not null references public.locations(id),
+  status text not null default 'draft' check (status in ('draft','submitted','approved','cancelled')),
+  note text,
+  created_by uuid references auth.users(id),
+  created_at timestamptz not null default now(),
+  approved_at timestamptz
+);
+create table if not exists public.order_items (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references public.orders(id) on delete cascade,
+  wine_id uuid not null references public.wines(id),
+  cartons integer not null check (cartons > 0),
+  created_at timestamptz not null default now(),
+  unique(order_id, wine_id)
+);
+create index if not exists idx_orders_location_id on public.orders(location_id);
+create index if not exists idx_orders_status on public.orders(status);
+create index if not exists idx_order_items_order_id on public.order_items(order_id);
+create index if not exists idx_order_items_wine_id on public.order_items(wine_id);
+alter table public.orders enable row level security;
+alter table public.order_items enable row level security;
+grant select, insert, update on table public.orders, public.order_items to anon, authenticated;
+create policy "mvp anon read orders" on public.orders for select to anon using (true);
+create policy "mvp anon write orders" on public.orders for insert to anon with check (created_by is null);
+create policy "mvp anon update orders" on public.orders for update to anon using (true) with check (true);
+create policy "mvp anon read order items" on public.order_items for select to anon using (true);
+create policy "mvp anon write order items" on public.order_items for insert to anon with check (true);
+
+create or replace function public.approve_order(p_order_id uuid)
+returns void language plpgsql security invoker set search_path = public
+as $$
+declare v_order public.orders; v_central_id uuid; v_item record;
+begin
+  select * into v_order from public.orders where id = p_order_id and status in ('draft','submitted') for update;
+  if not found then raise exception 'Bestellung nicht gefunden oder bereits verarbeitet'; end if;
+  select id into v_central_id from public.locations where name = 'Zentrallager';
+  for v_item in select wine_id, cartons from public.order_items where order_id = p_order_id loop
+    perform public.record_stock_movement(v_item.wine_id, v_central_id, v_order.location_id, v_item.cartons, 'ausgabe', 'Bestellung ' || p_order_id::text);
+  end loop;
+  update public.orders set status = 'approved', approved_at = now() where id = p_order_id;
+end;
+$$;
+grant execute on function public.approve_order(uuid) to anon, authenticated;
 create policy "mvp anon write movements" on public.stock_movements for insert to anon with check (created_by is null);
