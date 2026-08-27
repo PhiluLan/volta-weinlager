@@ -129,6 +129,7 @@ create table if not exists public.orders (
   note text,
   created_by uuid references auth.users(id),
   created_at timestamptz not null default now(),
+  delivery_date date,
   approved_at timestamptz
 );
 create table if not exists public.order_items (
@@ -136,6 +137,7 @@ create table if not exists public.order_items (
   order_id uuid not null references public.orders(id) on delete cascade,
   wine_id uuid not null references public.wines(id),
   cartons integer not null check (cartons > 0),
+  unit_price numeric(10,2),
   created_at timestamptz not null default now(),
   unique(order_id, wine_id)
 );

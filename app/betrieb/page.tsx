@@ -4,8 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-type Wine = { id: string; name: string; producer: string | null; category: string; stock: number };
-type Order = { id: string; status: string; created_at: string; order_items: { cartons: number; wine: { name: string }[] }[] };
+type Wine = { id: string; name: string; producer: string | null; category: string; stock: number; purchase_price: number | null };
+type Order = { id: string; status: string; created_at: string; delivery_date: string | null; order_items: { cartons: number; wine: { name: string }[] }[] };
+
+function nextDeliveryDate() {
+  const date = new Date();
+  const day = date.getDay();
+  date.setDate(date.getDate() + (day === 1 ? 7 : 8 - (day || 7)));
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 export default function BetriebPage() {
   const router = useRouter();
@@ -28,10 +35,10 @@ export default function BetriebPage() {
       const { data: ownProfile } = await supabase.from("profiles").select("email,location_id,locations(name)").eq("id", user.id).single();
       if (!ownProfile?.location_id) { setNotice("Dein Benutzer ist noch keinem Betrieb zugeordnet."); setSessionReady(true); setLoading(false); return; }
       const { data: locations } = await supabase.from("locations").select("id,name").eq("id", ownProfile.location_id).single();
-      const { data: wineRows } = await supabase.from("wines").select("id,name,producer,category").eq("active", true).order("name");
+      const { data: wineRows } = await supabase.from("wines").select("id,name,producer,category,purchase_price").eq("active", true).order("name");
       const { data: balances } = await supabase.from("stock_balances").select("wine_id,cartons").eq("location_id", (await supabase.from("locations").select("id").eq("name", "Zentrallager").single()).data?.id);
       const balanceMap = Object.fromEntries((balances ?? []).map((balance) => [balance.wine_id, balance.cartons]));
-      const { data: ownOrders } = await supabase.from("orders").select("id,status,created_at,order_items(cartons,wine:wines(name))").eq("location_id", ownProfile.location_id).order("created_at", { ascending: false });
+      const { data: ownOrders } = await supabase.from("orders").select("id,status,created_at,delivery_date,order_items(cartons,wine:wines(name))").eq("location_id", ownProfile.location_id).order("created_at", { ascending: false });
       if (!mounted) return;
       setProfile({ email: ownProfile.email, location_id: ownProfile.location_id, location_name: locations?.name ?? "Betrieb" });
       setWines((wineRows ?? []).map((wine) => ({ ...wine, stock: balanceMap[wine.id] ?? 0 })));
@@ -42,14 +49,15 @@ export default function BetriebPage() {
 
   async function submitOrder() {
     if (!profile || !Object.keys(cart).length) return;
-    const { data: order, error } = await supabase.from("orders").insert({ location_id: profile.location_id, status: "submitted", created_by: (await supabase.auth.getUser()).data.user?.id }).select("id").single();
+    const deliveryDate = nextDeliveryDate();
+    const { data: order, error } = await supabase.from("orders").insert({ location_id: profile.location_id, status: "submitted", delivery_date: deliveryDate, created_by: (await supabase.auth.getUser()).data.user?.id }).select("id").single();
     if (error || !order) { setNotice(error?.message ?? "Bestellung konnte nicht angelegt werden"); return; }
-    const { error: itemError } = await supabase.from("order_items").insert(Object.entries(cart).map(([wineId, cartons]) => ({ order_id: order.id, wine_id: wineId, cartons })));
+    const { error: itemError } = await supabase.from("order_items").insert(Object.entries(cart).map(([wineId, cartons]) => ({ order_id: order.id, wine_id: wineId, cartons, unit_price: wines.find((wine) => wine.id === wineId)?.purchase_price ?? 0 })));
     if (itemError) { setNotice(itemError.message); return; }
     const { error: submitError } = await supabase.rpc("submit_order", { p_order_id: order.id });
     if (submitError) { setNotice(submitError.message); return; }
     setWines((items) => items.map((wine) => ({ ...wine, stock: wine.stock - (cart[wine.id] ?? 0) }))); setCart({}); setView("history"); setNotice("Bestellung übermittelt und Bestand aktualisiert");
-    const { data: ownOrders } = await supabase.from("orders").select("id,status,created_at,order_items(cartons,wine:wines(name))").eq("location_id", profile.location_id).order("created_at", { ascending: false });
+    const { data: ownOrders } = await supabase.from("orders").select("id,status,created_at,delivery_date,order_items(cartons,wine:wines(name))").eq("location_id", profile.location_id).order("created_at", { ascending: false });
     setOrders((ownOrders ?? []) as Order[]);
   }
 
