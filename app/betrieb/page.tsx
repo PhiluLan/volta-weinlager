@@ -41,6 +41,10 @@ export default function BetriebPage() {
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [notice, setNotice] = useState("");
+  const [suggestionName, setSuggestionName] = useState("");
+  const [suggestionProducer, setSuggestionProducer] = useState("");
+  const [suggestionNote, setSuggestionNote] = useState("");
+  const [requestLoading, setRequestLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -72,6 +76,21 @@ export default function BetriebPage() {
   const reportCartons = reportOrders.reduce((sum, order) => sum + (order.order_items ?? []).reduce((subtotal, item) => subtotal + item.cartons, 0), 0);
 
   async function toggleFavorite(id: string) { if (!profile) return; const next = favorites.includes(id) ? favorites.filter((favorite) => favorite !== id) : [...favorites, id]; setFavorites(next); const { error } = await supabase.from("profiles").update({ favorite_wine_ids: next }).eq("id", profile.id); if (error) setNotice("Favoriten konnten nicht gespeichert werden"); }
+  async function requestReorder(wine: Wine) {
+    if (!profile || requestLoading) return;
+    setRequestLoading(true);
+    const { error } = await supabase.from("purchase_requests").insert({ request_type: "reorder", wine_id: wine.id, location_id: profile.location_id, created_by: profile.id, title: wine.name, note: `Bitte ${wine.name} nachbestellen.` });
+    setRequestLoading(false);
+    setNotice(error ? "Nachbestellung konnte nicht gemeldet werden" : `Nachbestellung für ${wine.name} an den Super-Admin gemeldet`);
+  }
+  async function submitSuggestion() {
+    if (!profile || !suggestionName.trim() || requestLoading) return;
+    setRequestLoading(true);
+    const { error } = await supabase.from("purchase_requests").insert({ request_type: "suggestion", location_id: profile.location_id, created_by: profile.id, title: suggestionName.trim(), note: [suggestionProducer.trim() && `Produzent: ${suggestionProducer.trim()}`, suggestionNote.trim()].filter(Boolean).join("\n") || null });
+    setRequestLoading(false);
+    if (error) { setNotice("Weinvorschlag konnte nicht gesendet werden"); return; }
+    setSuggestionName(""); setSuggestionProducer(""); setSuggestionNote(""); setNotice("Weinvorschlag an den Super-Admin gesendet");
+  }
   async function submitOrder() {
     if (!profile || !Object.keys(cart).length) return;
     const deliveryDate = nextDeliveryDate();
@@ -94,8 +113,8 @@ export default function BetriebPage() {
     if (y > 270) { doc.addPage(); y = 18; } doc.line(14, y, right, y); y += 9; doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.text(`Total ${profile.location_name}`, 14, y); doc.text(money(reportTotal), right, y, { align: "right" }); doc.save(`Volta-Weinlager-${profile.location_name}-${month}.pdf`);
   }
 
-  function renderWine(wine: Wine, ordering: boolean) { return <div className={`business-wine ${wine.stock === 0 ? "out-of-stock" : ""}`} key={wine.id}><div className="business-wine-main"><button className="favorite-button" onClick={() => toggleFavorite(wine.id)} aria-label={favorites.includes(wine.id) ? "Favorit entfernen" : "Als Favorit markieren"}>{favorites.includes(wine.id) ? "★" : "☆"}</button><div><strong>{wine.name}</strong><small>{wine.producer ?? "–"} · {wine.category}</small></div></div><b>{wine.stock} <em>Kartons</em></b>{ordering && <div className="business-controls"><button disabled={!cart[wine.id]} onClick={() => setCart((items) => ({ ...items, [wine.id]: Math.max(0, (items[wine.id] ?? 0) - 1) }))}>−</button><span>{cart[wine.id] ?? 0}</span><button disabled={wine.stock <= (cart[wine.id] ?? 0)} onClick={() => setCart((items) => ({ ...items, [wine.id]: (items[wine.id] ?? 0) + 1 }))}>＋</button></div>}</div>; }
-  function renderGroups(ordering: boolean) { return <div className="inventory-groups">{groups.map((group) => { const groupWines = (favoriteOnly && ordering ? favoriteWines : filteredWines).filter((wine) => groupForCategory(wine.category) === group.key); if (!groupWines.length) return null; return <section className={`inventory-group inventory-group-${group.key}`} key={group.key}><div className="inventory-group-heading"><div><span className="inventory-group-kicker">Sortiment</span><h3>{group.label}</h3><p>{group.description}</p></div><strong>{groupWines.length} <small>Artikel</small></strong></div><div className="business-wines">{groupWines.map((wine) => renderWine(wine, ordering))}</div></section>; })}</div>; }
+  function renderWine(wine: Wine, ordering: boolean) { return <div className={`business-wine ${wine.stock === 0 ? "out-of-stock" : ""}`} key={wine.id}><div className="business-wine-main"><button className="favorite-button" onClick={() => toggleFavorite(wine.id)} aria-label={favorites.includes(wine.id) ? "Favorit entfernen" : "Als Favorit markieren"}>{favorites.includes(wine.id) ? "★" : "☆"}</button><div><strong>{wine.name}</strong><small>{wine.producer ?? "–"} · {wine.category}</small></div></div><b>{wine.stock} <em>Kartons</em></b>{ordering && <div className="business-controls"><button disabled={!cart[wine.id]} onClick={() => setCart((items) => ({ ...items, [wine.id]: Math.max(0, (items[wine.id] ?? 0) - 1) }))}>−</button><span>{cart[wine.id] ?? 0}</span><button disabled={wine.stock <= (cart[wine.id] ?? 0)} onClick={() => setCart((items) => ({ ...items, [wine.id]: (items[wine.id] ?? 0) + 1 }))}>＋</button></div>}<button className="reorder-button" onClick={() => requestReorder(wine)}>↻ Nachbestellen</button></div>; }
+  function renderGroups(ordering: boolean) { return <div className="inventory-groups">{groups.map((group) => { const groupWines = (favoriteOnly && ordering ? favoriteWines : filteredWines).filter((wine) => groupForCategory(wine.category) === group.key); if (!groupWines.length) return null; return <section className={`inventory-group inventory-group-${group.key}`} key={group.key}><div className="inventory-group-heading"><div><span className="inventory-group-kicker">Sortiment</span><h3>{group.label}</h3><p>{group.description}</p></div><strong>{groupWines.length} <small>Artikel</small></strong></div><div className="business-wines">{groupWines.map((wine) => renderWine(wine, ordering))}</div></section>; })}{ordering && <section className="suggestion-panel"><div><div className="eyebrow">Sortiment mitgestalten</div><h2>Wein vorschlagen</h2><p>Du kennst einen Wein, der gut zu eurem Betrieb passt? Schicke deinen Vorschlag direkt an den Super-Admin.</p></div><div className="suggestion-fields"><input value={suggestionName} onChange={(event) => setSuggestionName(event.target.value)} placeholder="Name des Weins" /><input value={suggestionProducer} onChange={(event) => setSuggestionProducer(event.target.value)} placeholder="Produzent (optional)" /><textarea value={suggestionNote} onChange={(event) => setSuggestionNote(event.target.value)} placeholder="Bemerkung oder Link (optional)" rows={3} /></div><button className="secondary-button" disabled={!suggestionName.trim() || requestLoading} onClick={submitSuggestion}>Vorschlag senden</button></section>}</div>; }
 
   if (!sessionReady || loading) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Weinlager wird geladen …</h1></div></main>;
   if (!profile) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Kein Betrieb zugeordnet</h1><p>{notice || "Bitte wende dich an den Super-Admin."}</p><button className="primary-button auth-submit" onClick={signOut}>Abmelden</button></div></main>;

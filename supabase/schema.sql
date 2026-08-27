@@ -265,3 +265,22 @@ end;
 $$;
 revoke execute on function public.complete_order(uuid) from anon;
 grant execute on function public.complete_order(uuid) to authenticated;
+-- Anfragen der Betriebe: Nachbestellungen und Weinvorschläge.
+create table if not exists public.purchase_requests (
+  id uuid primary key default gen_random_uuid(),
+  request_type text not null check (request_type in ('reorder', 'suggestion')),
+  wine_id uuid references public.wines(id) on delete set null,
+  location_id uuid not null references public.locations(id),
+  created_by uuid not null references auth.users(id),
+  title text not null,
+  note text,
+  status text not null default 'open' check (status in ('open', 'handled')),
+  created_at timestamptz not null default now(),
+  handled_at timestamptz
+);
+alter table public.purchase_requests enable row level security;
+grant select, insert, update on table public.purchase_requests to authenticated;
+create policy "users create own purchase requests" on public.purchase_requests for insert to authenticated with check (created_by = (select auth.uid()) and location_id = (select location_id from public.profiles where id = (select auth.uid()) and role = 'user'));
+create policy "users read own purchase requests" on public.purchase_requests for select to authenticated using (created_by = (select auth.uid()));
+create policy "admin read purchase requests" on public.purchase_requests for select to authenticated using ((select auth.jwt() ->> 'email') = 'planger@voltabraeu.ch');
+create policy "admin update purchase requests" on public.purchase_requests for update to authenticated using ((select auth.jwt() ->> 'email') = 'planger@voltabraeu.ch') with check ((select auth.jwt() ->> 'email') = 'planger@voltabraeu.ch');

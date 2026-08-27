@@ -28,7 +28,7 @@ const demoActivities: Activity[] = [
   { type: "Ausgabe", wine: "Venus Rosé", detail: "Nomad · 3 Kartons", time: "Gestern, 13:05", tone: "rose" },
   { type: "Inventur", wine: "Chardonnay Réserve", detail: "Zentrallager · korrigiert", time: "26.08.2026, 11:30", tone: "blue" },
 ];
-const navItems = ["Übersicht", "Bestand", "Bestellungen", "Abrechnung", "Wareneingang", "Inventur", "Historie", "Stammdaten", "Benutzer"];
+const navItems = ["Übersicht", "Bestand", "Bestellungen", "Anfragen", "Abrechnung", "Wareneingang", "Inventur", "Historie", "Stammdaten", "Benutzer"];
 function categorySortValue(category: string) { const value = category.toLowerCase(); if (value.includes("schaum")) return 0; if (value.includes("weiss") || value.includes("weiß") || value.includes("rosé") || value.includes("rose")) return 1; if (value.includes("rot")) return 2; return 3; }
 function inventoryGroup(category: string) { const value = category.toLowerCase(); if (value.includes("schaum")) return "sparkling"; if (value.includes("weiss") || value.includes("weiß") || value.includes("rosé") || value.includes("rose")) return "white"; if (value.includes("rot")) return "red"; return "other"; }
 
@@ -52,6 +52,7 @@ export default function Home() {
   const [orderView, setOrderView] = useState<"new" | "history">("new");
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [pendingOrderCartons, setPendingOrderCartons] = useState(0);
+  const [pendingRequests, setPendingRequests] = useState(0);
   const [activities, setActivities] = useState<Activity[]>(demoActivities);
   const [history, setHistory] = useState<MovementHistory[]>([]);
   const [historyType, setHistoryType] = useState("Alle Bewegungen");
@@ -105,6 +106,8 @@ export default function Home() {
       const orderResult = await supabase.from("orders").select("id,status,created_at,approved_at,location:locations(name),order_items(cartons,wine:wines(name))").order("created_at", { ascending: false }).limit(30);
       if (orderResult.error) { showNotice("Bestellungen konnten nicht geladen werden"); }
       else { setOrders((orderResult.data ?? []).map((order) => ({ id: order.id, status: order.status, createdAt: order.created_at, approvedAt: order.approved_at, locationName: (order.location as unknown as { name: string } | null)?.name ?? "Unbekannter Betrieb", items: (order.order_items as unknown as { cartons: number; wine: { name: string }[] }[] ?? []).map((item) => ({ name: item.wine?.[0]?.name ?? "Unbekannter Wein", cartons: item.cartons })) }))); setPendingOrderCartons((orderResult.data ?? []).filter((order) => ["draft", "submitted"].includes(order.status)).reduce((sum, order) => sum + ((order.order_items as unknown as { cartons: number }[] ?? []).reduce((subtotal, item) => subtotal + item.cartons, 0)), 0)); }
+      const requestResult = await supabase.from("purchase_requests").select("id", { count: "exact", head: true }).eq("status", "open");
+      if (!requestResult.error) setPendingRequests(requestResult.count ?? 0);
       const movementResult = await supabase.from("stock_movements").select("id,created_at,movement_type,cartons,note,wine:wines(name),from:locations!stock_movements_from_location_id(name),to:locations!stock_movements_to_location_id(name)").order("created_at", { ascending: false }).limit(100);
       if (!movementResult.error && movementResult.data?.length) { const rows = movementResult.data.map((movement) => { const wine = (movement.wine as unknown as { name: string }[] | null)?.[0]?.name ?? "Unbekannter Wein"; const to = (movement.to as unknown as { name: string }[] | null)?.[0]?.name ?? ""; const from = (movement.from as unknown as { name: string }[] | null)?.[0]?.name ?? ""; const label = movement.movement_type === "wareneingang" ? "Wareneingang" : movement.movement_type === "inventur" ? "Inventur" : "Ausgabe"; return { id: movement.id, type: label, wine, cartons: movement.cartons, from, to, note: movement.note, createdAt: movement.created_at }; }); setHistory(rows); setActivities(rows.slice(0, 5).map((row) => ({ type: row.type, wine: row.wine, detail: `${row.to || row.from || "Zentrallager"} · ${row.cartons} Kartons`, time: new Date(row.createdAt).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" }), tone: row.type === "Wareneingang" ? "green" : row.type === "Inventur" ? "blue" : "rose" }))); }
       const balanceResult = await supabase.from("stock_balances").select("wine_id,cartons").eq("location_id", ids.Zentrallager);
@@ -230,7 +233,7 @@ export default function Home() {
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark">VB</div><div><div className="brand-name">Volta Weinlager</div><div className="brand-sub">Zentrales Lager</div></div></div>
         <div className="nav-label">Arbeitsbereich</div>
-        <nav>{navItems.map((item, index) => <button key={item} className={`nav-item ${active === item ? "active" : ""}`} onClick={() => item === "Benutzer" ? router.push("/admin/benutzer") : item === "Bestellungen" ? router.push("/admin/bestellungen") : item === "Abrechnung" ? router.push("/admin/abrechnung") : setActive(item)}><span className="nav-icon">{["⌂", "▦", "□", "▤", "↓", "◉", "≡", "⚙", "♙"][index]}</span>{item}{item === "Bestellungen" && <span className="nav-count">2</span>}</button>)}</nav>
+      <nav>{navItems.map((item, index) => <button key={item} className={`nav-item ${active === item ? "active" : ""}`} onClick={() => item === "Benutzer" ? router.push("/admin/benutzer") : item === "Bestellungen" ? router.push("/admin/bestellungen") : item === "Anfragen" ? router.push("/admin/anfragen") : item === "Abrechnung" ? router.push("/admin/abrechnung") : setActive(item)}><span className="nav-icon">{["⌂", "▦", "□", "◇", "▤", "↓", "◉", "≡", "⚙", "♙"][index]}</span>{item}{item === "Bestellungen" && <span className="nav-count">2</span>}{item === "Anfragen" && pendingRequests > 0 && <span className="nav-count">{pendingRequests}</span>}</button>)}</nav>
         <div className="sidebar-bottom"><div className="nav-label">Verwaltung</div><button className={`nav-item ${active === "Einstellungen" ? "active" : ""}`} onClick={() => setActive("Einstellungen")}><span className="nav-icon">⚙</span>Einstellungen</button><button className="user-chip user-logout" onClick={signOut}><div className="avatar">PS</div><div><strong>Philipp</strong><span>Abmelden</span></div><span className="dots">•••</span></button></div>
       </aside>
       <section className="content">
