@@ -1,0 +1,22 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../../../lib/supabase";
+
+type Profile = { id: string; email: string; full_name: string | null; role: "super_admin" | "user"; location_id: string | null; locations: { name: string } | { name: string }[] | null };
+type Location = { id: string; name: string; kind: string };
+
+export default function BenutzerPage() {
+  const router = useRouter();
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState("");
+  useEffect(() => { let mounted = true; supabase.auth.getUser().then(async ({ data: { user } }) => { if (!user) { router.push("/"); return; } const own = await supabase.from("profiles").select("role").eq("id", user.id).single(); if (own.data?.role !== "super_admin") { setNotice("Nur der Super-Admin darf Benutzer verwalten."); setLoading(false); return; } const [profileResult, locationResult] = await Promise.all([supabase.from("profiles").select("id,email,full_name,role,location_id,locations(name)").order("email"), supabase.from("locations").select("id,name,kind").order("name")]); if (mounted) { setProfiles((profileResult.data ?? []) as Profile[]); setLocations(locationResult.data ?? []); setLoading(false); } }); return () => { mounted = false; }; }, [router]);
+  async function updateProfile(id: string, role: string, locationId: string) { const { error } = await supabase.from("profiles").update({ role, location_id: role === "super_admin" ? null : locationId || null }).eq("id", id); if (error) { setNotice(error.message); return; } setProfiles((items) => items.map((item) => item.id === id ? { ...item, role: role as Profile["role"], location_id: role === "super_admin" ? null : locationId, locations: locations.filter((location) => location.id === locationId).map((location) => ({ name: location.name })) } : item)); setNotice("Benutzerzuordnung gespeichert"); window.setTimeout(() => setNotice(""), 3000); }
+  async function signOut() { await supabase.auth.signOut(); router.push("/"); }
+  if (loading) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Benutzer werden geladen …</h1></div></main>;
+  if (notice && profiles.length === 0) return <main className="auth-page"><div className="auth-card"><div className="brand-mark">VB</div><h1>Zugriff verweigert</h1><p>{notice}</p><button className="primary-button auth-submit" onClick={signOut}>Abmelden</button></div></main>;
+  return <main className="inventory-page"><header className="inventory-top"><button className="back-button" onClick={() => router.push("/")}>← Dashboard</button><div className="top-actions"><button className="secondary-button" onClick={signOut}>Abmelden</button></div></header><div className="inventory-content"><div className="page-heading"><div><div className="eyebrow">Administration · Geschützter Bereich</div><h1>Benutzer & Rollen</h1><p>Betriebszuordnungen und Zugriffsrollen verwalten.</p></div></div>{notice && <div className="toast">✓ {notice}</div>}<section className="inventory-panel user-management"><div className="panel-heading"><div><h2>Benutzerkonten</h2><p>Nur der Super-Admin kann diese Zuordnungen ändern.</p></div><span className="snapshot-badge">Geschützt</span></div><div className="user-list">{profiles.map((profile) => <div className="managed-user" key={profile.id}><div><strong>{profile.full_name || profile.email}</strong><small>{profile.email}</small></div><select value={profile.role} onChange={(event) => updateProfile(profile.id, event.target.value, profile.location_id ?? "")}><option value="user">Benutzer</option><option value="super_admin">Super-Admin</option></select><select value={profile.location_id ?? ""} disabled={profile.role === "super_admin"} onChange={(event) => updateProfile(profile.id, profile.role, event.target.value)}><option value="">Betrieb auswählen …</option>{locations.filter((location) => location.kind === "betrieb").map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</select><span className="managed-location">{profile.role === "super_admin" ? "Alle Bereiche" : Array.isArray(profile.locations) ? profile.locations[0]?.name ?? "Nicht zugeordnet" : profile.locations?.name ?? "Nicht zugeordnet"}</span></div>)}</div></section></div></main>;
+}
