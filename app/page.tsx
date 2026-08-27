@@ -25,6 +25,7 @@ const demoActivities: Activity[] = [
   { type: "Inventur", wine: "Chardonnay Réserve", detail: "Zentrallager · korrigiert", time: "26.08.2026, 11:30", tone: "blue" },
 ];
 const navItems = ["Übersicht", "Bestand", "Bestellungen", "Wareneingang", "Inventur", "Historie", "Stammdaten"];
+function categorySortValue(category: string) { const value = category.toLowerCase(); if (value.includes("schaum")) return 0; if (value.includes("weiss") || value.includes("weiß")) return 1; if (value.includes("rot")) return 2; return 3; }
 
 export default function Home() {
   const [active, setActive] = useState("Übersicht");
@@ -51,6 +52,7 @@ export default function Home() {
   const [incomingSaving, setIncomingSaving] = useState(false);
   const [countedStocks, setCountedStocks] = useState<Record<string, string>>({});
   const [inventorySaving, setInventorySaving] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
   const [masterWineId, setMasterWineId] = useState<string | null>(null);
   const [masterName, setMasterName] = useState("");
   const [masterProducer, setMasterProducer] = useState("");
@@ -61,7 +63,7 @@ export default function Home() {
   const [masterPurchasePrice, setMasterPurchasePrice] = useState("");
   const [masterMinStock, setMasterMinStock] = useState("10");
   const [masterSaving, setMasterSaving] = useState(false);
-  const filteredWines = useMemo(() => inventory.filter((wine) => `${wine.name} ${wine.producer} ${wine.category}`.toLowerCase().includes(query.toLowerCase())), [inventory, query]);
+  const filteredWines = useMemo(() => inventory.filter((wine) => `${wine.name} ${wine.producer} ${wine.category}`.toLowerCase().includes(query.toLowerCase())).sort((a, b) => categorySortValue(a.category) - categorySortValue(b.category) || a.name.localeCompare(b.name)), [inventory, query]);
   const filteredHistory = useMemo(() => history.filter((movement) => (historyType === "Alle Bewegungen" || movement.type === historyType) && `${movement.wine} ${movement.from} ${movement.to} ${movement.note ?? ""}`.toLowerCase().includes(query.toLowerCase())), [history, historyType, query]);
   const lowStock = useMemo(() => inventory.filter((wine) => wine.stock <= wine.minStock).length, [inventory]);
   const totalStock = useMemo(() => inventory.reduce((sum, wine) => sum + wine.stock, 0), [inventory]);
@@ -88,12 +90,13 @@ export default function Home() {
       setDataLoading(false);
     });
     return () => { mounted = false; };
-  }, []);
+  }, [refreshTick]);
   async function saveMovement() {
     if (!selectedWine?.id || !locationIds.Zentrallager || !locationIds[site]) return;
     const { error } = await supabase.rpc("record_stock_movement", { p_wine_id: selectedWine.id, p_from_location_id: locationIds.Zentrallager, p_to_location_id: locationIds[site], p_cartons: quantity, p_movement_type: "ausgabe", p_note: null });
     if (error) { showNotice(error.message); return; }
     setInventory((items) => items.map((item) => item.name === selectedWine.name ? { ...item, stock: item.stock - quantity } : item));
+    setRefreshTick((value) => value + 1);
     setSelectedWine(null);
     showNotice(`${quantity} Karton ${selectedWine.name} an ${site} ausgegeben`);
   }
@@ -111,6 +114,7 @@ export default function Home() {
     const { error: approvalError } = await supabase.rpc("approve_order", { p_order_id: order.id });
     if (approvalError) { showNotice(approvalError.message); return; }
     setInventory((items) => items.map((wine) => { const item = orderCart.find((entry) => entry.wineId === wine.id); return item ? { ...wine, stock: wine.stock - item.cartons } : wine; }));
+    setRefreshTick((value) => value + 1);
     setOrders((items) => [{ id: order.id, status: "approved", createdAt: new Date().toISOString(), approvedAt: new Date().toISOString(), locationName: orderSite, items: orderCart.map((item) => ({ name: item.name, cartons: item.cartons })) }, ...items]);
     setOrderCart([]);
     setOrderView("history");
@@ -125,6 +129,7 @@ export default function Home() {
     setIncomingSaving(false);
     if (error) { showNotice(error.message); return; }
     setInventory((items) => items.map((item) => item.id === incomingWineId ? { ...item, stock: item.stock + incomingQuantity } : item));
+    setRefreshTick((value) => value + 1);
     setIncomingWineId(""); setIncomingQuantity(1); setIncomingSupplier(""); setIncomingReference("");
     showNotice(`${incomingQuantity} Karton ${wine.name} im Zentrallager erfasst`);
   }
@@ -139,6 +144,7 @@ export default function Home() {
     setInventorySaving(false);
     if (error) { showNotice(error.message); return; }
     setInventory((items) => items.map((item) => item.id === wine.id ? { ...item, stock: counted } : item));
+    setRefreshTick((value) => value + 1);
     setCountedStocks((values) => { const next = { ...values }; delete next[wine.id as string]; return next; });
     showNotice(`${wine.name}: Bestand auf ${counted} Kartons korrigiert`);
   }
