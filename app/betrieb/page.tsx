@@ -46,7 +46,7 @@ export default function BetriebPage() {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!mounted) return;
       if (!user) { router.push("/"); return; }
-      const { data: ownProfile } = await supabase.from("profiles").select("id,email,location_id,locations(name)").eq("id", user.id).single();
+      const { data: ownProfile } = await supabase.from("profiles").select("id,email,location_id,favorite_wine_ids,locations(name)").eq("id", user.id).single();
       if (!ownProfile?.location_id) { setNotice("Dein Benutzer ist noch keinem Betrieb zugeordnet."); setSessionReady(true); setLoading(false); return; }
       const location = await supabase.from("locations").select("id,name").eq("id", ownProfile.location_id).single();
       const wineRows = await supabase.from("wines").select("id,name,producer,category,purchase_price").eq("active", true).order("name");
@@ -58,8 +58,7 @@ export default function BetriebPage() {
       setProfile({ id: ownProfile.id, email: ownProfile.email, location_id: ownProfile.location_id, location_name: location.data?.name ?? "Betrieb" });
       setWines((wineRows.data ?? []).map((wine) => ({ ...wine, stock: balanceMap[wine.id] ?? 0 })) as Wine[]);
       setOrders((ownOrders.data ?? []) as Order[]);
-      const savedFavorites = window.localStorage.getItem(`volta-weinlager-favorites-${user.id}`);
-      if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
+      setFavorites(ownProfile.favorite_wine_ids ?? []);
       setSessionReady(true); setLoading(false);
     });
     return () => { mounted = false; };
@@ -71,7 +70,7 @@ export default function BetriebPage() {
   const reportTotal = reportOrders.reduce((sum, order) => sum + (order.order_items ?? []).reduce((subtotal, item) => subtotal + item.cartons * itemPrice(item), 0), 0);
   const reportCartons = reportOrders.reduce((sum, order) => sum + (order.order_items ?? []).reduce((subtotal, item) => subtotal + item.cartons, 0), 0);
 
-  function toggleFavorite(id: string) { if (!profile) return; const next = favorites.includes(id) ? favorites.filter((favorite) => favorite !== id) : [...favorites, id]; setFavorites(next); window.localStorage.setItem(`volta-weinlager-favorites-${profile.id}`, JSON.stringify(next)); }
+  async function toggleFavorite(id: string) { if (!profile) return; const next = favorites.includes(id) ? favorites.filter((favorite) => favorite !== id) : [...favorites, id]; setFavorites(next); const { error } = await supabase.from("profiles").update({ favorite_wine_ids: next }).eq("id", profile.id); if (error) setNotice("Favoriten konnten nicht gespeichert werden"); }
   async function submitOrder() {
     if (!profile || !Object.keys(cart).length) return;
     const deliveryDate = nextDeliveryDate();

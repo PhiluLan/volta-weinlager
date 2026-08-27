@@ -178,6 +178,7 @@ create table if not exists public.profiles (
   full_name text,
   role text not null default 'user' check (role in ('super_admin','user')),
   location_id uuid references public.locations(id),
+  favorite_wine_ids uuid[] not null default '{}',
   created_at timestamptz not null default now(),
   constraint user_location_required check (role = 'super_admin' or location_id is not null)
 );
