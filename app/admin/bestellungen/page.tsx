@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-type Order = { id: string; status: string; created_at: string; created_by: string | null; location: { name: string } | { name: string }[] | null; creator: { email: string } | { email: string }[] | null; order_items: { cartons: number; wine: { name: string }[] }[] };
+type Order = { id: string; status: string; created_at: string; created_by: string | null; location: { name: string } | { name: string }[] | null; creator: { email: string } | null; order_items: { cartons: number; wine: { name: string }[] }[] };
 
 function one<T>(value: T | T[] | null) { return Array.isArray(value) ? value[0] : value; }
 
@@ -14,7 +14,22 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"open" | "history">("open");
   const [notice, setNotice] = useState("");
-  const loadOrders = async () => { const result = await supabase.from("orders").select("id,status,created_at,created_by,location:locations(name),creator:profiles!orders_created_by_fkey(email),order_items(cartons,wine:wines(name))").order("created_at", { ascending: false }); if (result.error) setNotice(result.error.message); else setOrders((result.data ?? []) as Order[]); setLoading(false); };
+  const loadOrders = async () => {
+    const [orderResult, profileResult] = await Promise.all([
+      supabase.from("orders").select("id,status,created_at,created_by,location:locations(name),order_items(cartons,wine:wines(name))").order("created_at", { ascending: false }),
+      supabase.from("profiles").select("id,email"),
+    ]);
+    if (orderResult.error) setNotice(orderResult.error.message);
+    else if (profileResult.error) setNotice(profileResult.error.message);
+    else {
+      const emails = Object.fromEntries((profileResult.data ?? []).map((profile) => [profile.id, profile.email]));
+      setOrders((orderResult.data ?? []).map((order) => ({
+        ...order,
+        creator: order.created_by ? { email: emails[order.created_by] ?? "Unbekannter Besteller" } : null,
+      })) as Order[]);
+    }
+    setLoading(false);
+  };
   useEffect(() => { let mounted = true; supabase.auth.getUser().then(async ({ data: { user } }) => { if (!user) { router.push("/"); return; } const profile = await supabase.from("profiles").select("role").eq("id", user.id).single(); if (profile.data?.role !== "super_admin") { setNotice("Nur der Super-Admin darf alle Bestellungen sehen."); setLoading(false); return; } if (mounted) await loadOrders(); }); return () => { mounted = false; }; }, [router]);
   const visibleOrders = useMemo(() => orders.filter((order) => view === "open" ? order.status === "submitted" : order.status === "delivered"), [orders, view]);
   async function completeOrder(id: string) { const { error } = await supabase.rpc("complete_order", { p_order_id: id }); if (error) { setNotice(error.message); return; } setOrders((items) => items.map((order) => order.id === id ? { ...order, status: "delivered" } : order)); setNotice("Bestellung als erledigt markiert und Bestand aktualisiert"); window.setTimeout(() => setNotice(""), 3500); }
